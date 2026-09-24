@@ -6,7 +6,7 @@ const PreSalesJourneyValidator = require("../scanner/preSalesJourneyValidator");
 const preSalesReportGenerator = require("../reports/preSalesReportGenerator");
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
 
 let currentJob = null;
 let activeValidator = null;
@@ -527,7 +527,7 @@ app.get("/api/journeys/current", (req, res) => {
     });
 });
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Web server running at http://localhost:${PORT}`);
 });
 
