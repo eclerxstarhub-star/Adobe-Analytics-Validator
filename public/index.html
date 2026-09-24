@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adobe Website Analytics Validator</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f6f9;
+            color: #1f2937;
+        }
+
+        .header {
+            background: #1d3557;
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            letter-spacing: 0.5px;
+        }
+
+        .header p {
+            margin: 8px 0 0;
+            font-size: 13px;
+            opacity: 0.85;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 22px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            color: #1d3557;
+            font-size: 19px;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 18px;
+        }
+
+        .menu-option {
+            border: 1px solid #d8dee8;
+            border-radius: 8px;
+            padding: 22px;
+            cursor: pointer;
+            background: #ffffff;
+            transition: 0.2s;
+        }
+
+        .menu-option:hover {
+            border-color: #1d3557;
+            background: #f1f5fb;
+            transform: translateY(-2px);
+        }
+
+        .menu-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1d3557;
+        }
+
+        .menu-title {
+            margin-top: 10px;
+            font-size: 17px;
+            font-weight: bold;
+        }
+
+        .menu-description {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 18px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+
+        label {
+            margin-bottom: 7px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #374151;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #1d3557;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-top: 8px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 13px;
+        }
+
+        .checkbox-item input {
+            width: auto;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border: none;
+            border-radius: 6px;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #1d3557;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #14253e;
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #1f2937;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .btn-primary:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .job-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
+        }
+
+        .job-field {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 7px;
+            padding: 13px;
+        }
+
+        .job-label {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .job-value {
+            font-size: 14px;
+            font-weight: bold;
+            word-break: break-word;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-idle {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .status-queued {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-running {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .status-completed {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .log-box {
+            background: #111827;
+            color: #d1fae5;
+            border-radius: 7px;
+            padding: 16px;
+            min-height: 180px;
+            max-height: 350px;
+            overflow-y: auto;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+        }
+
+        .summary-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 7px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 23px;
+            font-weight: bold;
+            color: #1d3557;
+        }
+
+        .summary-label {
+            margin-top: 6px;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .message.error {
+            display: block;
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .message.success {
+            display: block;
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+
+        .section-heading h2 {
+            margin-bottom: 0;
+        }
+
+        .report-row {
+            display: grid;
+            grid-template-columns: 160px 1fr;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .report-row a {
+            color: #1d4ed8;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        .report-row a:hover {
+            text-decoration: underline;
+        }
+
+        .page-table-wrap {
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        .page-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .page-table th,
+        .page-table td {
+            border: 1px solid #e2e8f0;
+            padding: 9px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .page-table th {
+            background: #f1f5f9;
+        }
+
+        .page-status {
+            font-weight: bold;
+        }
+
+        .page-status.pass {
+            color: #166534;
+        }
+
+        .page-status.fail {
+            color: #991b1b;
+        }
+
+        .page-status.running {
+            color: #1d4ed8;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin-top: 18px;
+            }
+
+            .card {
+                padding: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <h1>ADOBE WEBSITE ANALYTICS VALIDATOR</h1>
+        <p>Adobe Analytics, CTA and Pre-Sales Journey Validation</p>
+    </header>
+
+    <main class="container">
+
+        <!-- MAIN MENU -->
+        <section id="mainMenu" class="card">
+            <h2>Select Validation Option</h2>
+
+            <div class="menu-grid">
+                <div class="menu-option" onclick="showValidationForm('analytics')">
+                    <div class="menu-number">1</div>
+                    <div class="menu-title">
+                        Adobe Analytics & CTA Validation
+                    </div>
+                    <div class="menu-description">
+                        Validate Adobe Analytics page-load hits, CTA tracking,
+                        eVars, props, events and products.
+                    </div>
+                </div>
+
+                <div class="menu-option" onclick="showValidationForm('presales')">
+                    <div class="menu-number">2</div>
+                    <div class="menu-title">
+                        Pre-Sales Journey Validation
+                    </div>
+                    <div class="menu-description">
+                        Execute the Pre-Sales journey with configurable
+                        payment mode, payment period and SIM type.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ADOBE ANALYTICS FORM -->
+        <section id="analyticsForm" class="card hidden">
+            <div class="section-heading">
+                <h2>Adobe Analytics & CTA Validation</h2>
+                <span class="status status-idle">Configuration</span>
+            </div>
+
+            <form id="analyticsValidationForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="analyticsUrl">Website URL</label>
+                        <input
+                            type="url"
+                            id="analyticsUrl"
+                            placeholder="https://example.com"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="analyticsMaxPages">Maximum Pages</label>
+                        <input
+                            type="number"
+                            id="analyticsMaxPages"
+                            value="25"
+                            min="1"
+                            max="100"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label>Validation Options</label>
+
+                        <div class="checkbox-group">
+                            <label class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    id="validatePageLoad"
+                                    checked
+                                >
+                                Page-load Analytics
+                            </label>
+
+                            <label class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    id="validateEvars"
+                                    checked
+                                >
+                                eVars
+                            </label>
+
+                            <label class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    id="validateProps"
+                                    checked
+                                >
+                                Props
+                            </label>
+
+                            <label class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    id="validateEvents"
+                                    checked
+                                >
+                                Events
+                            </label>
+
+                            <label class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    id="validateProducts"
+                                    checked
+                                >
+                                Products
+                            </label>
+
+                            <label class="checkbox-item">
+                                <input
+                                    type="checkbox"
+                                    id="validateCta"
+                                    checked
+                                >
+                                CTA Validation
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button type="submit" class="btn-primary">
+                        Start Validation
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn-secondary"
+                        onclick="returnToMenu()"
+                    >
+                        Back
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- PRE-SALES FORM -->
+        <section id="presalesForm" class="card hidden">
+            <div class="section-heading">
+                <h2>Pre-Sales Journey Validation</h2>
+                <span class="status status-idle">Configuration</span>
+            </div>
+
+            <form id="presalesValidationForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="hubId">Hub ID</label>
+                        <input
+                            type="text"
+                            id="hubId"
+                            placeholder="Enter Hub ID"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="paymentMode">Payment Mode</label>
+                        <select id="paymentMode" required>
+                            <option value="">Select Payment Mode</option>
+                            <option value="Pay Later">Pay Later</option>
+                            <option value="Pay Today">Pay Today</option>
+                        </select>
+                    </div>
+
+                    <!-- Hidden automatically for Pay Today -->
+                    <div
+                        class="form-group"
+                        id="paymentPeriodGroup"
+                    >
+                        <label for="paymentPeriod">Pay Later Period</label>
+                        <select id="paymentPeriod">
+                            <option value="">Select Period</option>
+                            <option value="36">36 Months</option>
+                            <option value="24">24 Months</option>
+                            <option value="12">12 Months</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="simType">SIM Type</label>
+                        <select id="simType" required>
+                            <option value="">Select SIM Type</option>
+                            <option value="eSIM">eSIM</option>
+                            <option value="Physical SIM">Physical SIM</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button type="submit" class="btn-primary">
+                        Start Validation
+                    </button>
+
+                    <button
+                        type="button"
+                        class="btn-secondary"
+                        onclick="returnToMenu()"
+                    >
+                        Back
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- JOB DETAILS -->
+        <section id="jobSection" class="card hidden">
+            <div class="section-heading">
+                <h2>Job Details</h2>
+                <span id="jobStatus" class="status status-idle">
+                    NOT STARTED
+                </span>
+            </div>
+
+            <div class="job-grid">
+                <div class="job-field">
+                    <div class="job-label">Job ID</div>
+                    <div id="jobId" class="job-value">-</div>
+                </div>
+
+                <div class="job-field">
+                    <div class="job-label">Status</div>
+                    <div id="jobStatusText" class="job-value">-</div>
+                </div>
+
+                <div class="job-field">
+                    <div class="job-label">Started At</div>
+                    <div id="startedAt" class="job-value">-</div>
+                </div>
+
+                <div class="job-field">
+                    <div class="job-label">Completed At</div>
+                    <div id="completedAt" class="job-value">-</div>
+                </div>
+
+                <div class="job-field">
+                    <div class="job-label">Duration</div>
+                    <div id="duration" class="job-value">-</div>
+                </div>
+
+                <div class="job-field">
+                    <div class="job-label">Current Step</div>
+                    <div id="currentStep" class="job-value">-</div>
+                </div>
+            </div>
+
+            <div id="jobMessage" class="message"></div>
+
+        </section>
+
+        <!-- LIVE LOG -->
+        <section id="logSection" class="card hidden">
+            <div class="section-heading">
+                <h2>Timestamped Execution Log</h2>
+                <span class="status status-running">Live Log</span>
+            </div>
+
+            <div id="logBox" class="log-box">
+                Waiting for job logs...
+            </div>
+        </section>
+
+        <!-- SCANNED PAGES -->
+        <section id="pagesSection" class="card hidden">
+            <div class="section-heading">
+                <h2>Scanned Pages / Current Page</h2>
+            </div>
+
+            <div id="currentPageBox" class="job-field">
+                <div class="job-label">Current Page</div>
+                <div id="currentPageValue" class="job-value">-</div>
+            </div>
+
+            <div class="page-table-wrap">
+                <table class="page-table">
+                    <thead>
+                        <tr>
+                            <th>Sr. No.</th>
+                            <th>Page URL</th>
+                            <th>pageName</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pageTableBody">
+                        <tr><td colspan="4">Waiting for page data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- VALIDATION SUMMARY -->
+        <section id="summarySection" class="card hidden">
+            <div class="section-heading">
+                <h2>Validation Summary</h2>
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div id="journeyResult" class="summary-value">-</div>
+                    <div class="summary-label">Journey Validation</div>
+                </div>
+
+                <div class="summary-item">
+                    <div id="adobeResult" class="summary-value">-</div>
+                    <div class="summary-label">Adobe Analytics</div>
+                </div>
+
+                <div class="summary-item">
+                    <div id="ctaResult" class="summary-value">-</div>
+                    <div class="summary-label">CTA Validation</div>
+                </div>
+
+                <div class="summary-item">
+                    <div id="pagesResult" class="summary-value">0</div>
+                    <div class="summary-label">Pages Visited</div>
+                </div>
+
+                <div class="summary-item">
+                    <div id="hitsResult" class="summary-value">0</div>
+                    <div class="summary-label">Adobe Hits</div>
+                </div>
+
+                <div class="summary-item">
+                    <div id="errorsResult" class="summary-value">0</div>
+                    <div class="summary-label">Errors</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- REPORT -->
+        <section id="reportSection" class="card hidden">
+            <div class="report-row">
+                <div class="job-label">Report</div>
+                <div class="job-value">
+                    <a id="reportLink" href="#" target="_blank" rel="noopener">Open Report</a>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let activeMode = null;
+        let activeJobId = null;
+        let pollingTimer = null;
+
+        const mainMenu = document.getElementById("mainMenu");
+        const analyticsForm = document.getElementById("analyticsForm");
+        const presalesForm = document.getElementById("presalesForm");
+        const jobSection = document.getElementById("jobSection");
+        const logSection = document.getElementById("logSection");
+        const summarySection = document.getElementById("summarySection");
+        const pagesSection = document.getElementById("pagesSection");
+        const reportSection = document.getElementById("reportSection");
+
+        function hideAllForms() {
+            analyticsForm.classList.add("hidden");
+            presalesForm.classList.add("hidden");
+        }
+
+        function showValidationForm(mode) {
+            activeMode = mode;
+            mainMenu.classList.add("hidden");
+            hideAllForms();
+
+            if (mode === "analytics") {
+                analyticsForm.classList.remove("hidden");
+            }
+
+            if (mode === "presales") {
+                presalesForm.classList.remove("hidden");
+            }
+        }
+
+        function returnToMenu() {
+            if (pollingTimer) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+            }
+
+            activeMode = null;
+            activeJobId = null;
+
+            hideAllForms();
+            mainMenu.classList.remove("hidden");
+        }
+
+        const paymentMode = document.getElementById("paymentMode");
+        const paymentPeriodGroup = document.getElementById("paymentPeriod");
+        const paymentPeriodContainer = document.getElementById("paymentPeriodGroup");
+
+        paymentMode.addEventListener("change", function () {
+            if (this.value === "Pay Later") {
+                paymentPeriodContainer.classList.remove("hidden");
+                paymentPeriodGroup.required = true;
+            } else {
+                paymentPeriodContainer.classList.add("hidden");
+                paymentPeriodGroup.required = false;
+                paymentPeriodGroup.value = "";
+            }
+        });
+
+        document
+            .getElementById("presalesValidationForm")
+            .addEventListener("submit", async function (event) {
+                event.preventDefault();
+
+                const payload = {
+                    mode: "presales",
+                    hubId: document.getElementById("hubId").value.trim(),
+                    paymentMode: paymentMode.value,
+                    simType: document.getElementById("simType").value
+                };
+
+                if (paymentMode.value === "Pay Later") {
+                    payload.paymentPeriod = paymentPeriodGroup.value;
+                }
+
+                await startJob(payload);
+            });
+
+        document
+            .getElementById("analyticsValidationForm")
+            .addEventListener("submit", async function (event) {
+                event.preventDefault();
+
+                const payload = {
+                    mode: "analytics",
+                    url: document.getElementById("analyticsUrl").value.trim(),
+                    maxPages: Number(
+                        document.getElementById("analyticsMaxPages").value
+                    ),
+                    validations: {
+                        pageLoad: document.getElementById("validatePageLoad").checked,
+                        eVars: document.getElementById("validateEvars").checked,
+                        props: document.getElementById("validateProps").checked,
+                        events: document.getElementById("validateEvents").checked,
+                        products: document.getElementById("validateProducts").checked,
+                        cta: document.getElementById("validateCta").checked
+                    }
+                };
+
+                await startJob(payload);
+            });
+
+        async function startJob(payload) {
+            try {
+                const response = await fetch("/api/jobs", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || "Unable to start validation job.");
+                }
+
+                activeJobId = result.jobId;
+
+                jobSection.classList.remove("hidden");
+                logSection.classList.remove("hidden");
+                summarySection.classList.remove("hidden");
+                pagesSection.classList.remove("hidden");
+                reportSection.classList.add("hidden");
+
+                document.getElementById("jobId").textContent = activeJobId;
+                document.getElementById("jobStatusText").textContent = "QUEUED";
+                document.getElementById("currentStep").textContent = "Job queued";
+                document.getElementById("startedAt").textContent = formatDate(result.startedAt);
+
+                updateStatus("QUEUED");
+
+                document.getElementById("logBox").textContent =
+                    `[${getTime()}] Job created: ${activeJobId}\n`;
+
+                pollingTimer = setInterval(
+                    () => pollJobStatus(activeJobId),
+                    1500
+                );
+
+            } catch (error) {
+                showMessage(error.message, "error");
+            }
+        }
+
+        async function pollJobStatus(jobId) {
+            try {
+                const response = await fetch(`/api/jobs/${jobId}`);
+
+                if (!response.ok) {
+                    throw new Error("Unable to retrieve job status.");
+                }
+
+                const job = await response.json();
+
+                updateStatus(job.status);
+
+                document.getElementById("jobStatusText").textContent =
+                    job.status || "-";
+
+                document.getElementById("startedAt").textContent =
+                    formatDate(job.startedAt);
+
+                document.getElementById("completedAt").textContent =
+                    formatDate(job.completedAt);
+
+                document.getElementById("duration").textContent =
+                    job.duration || calculateDuration(job.startedAt);
+
+                document.getElementById("currentStep").textContent =
+                    job.currentStep || "-";
+
+                if (job.message) {
+                    showMessage(
+                        job.message,
+                        job.status === "FAILED" ? "error" : "success"
+                    );
+                }
+
+                if (Array.isArray(job.logs)) {
+                    document.getElementById("logBox").textContent =
+                        job.logs
+                            .map(log => {
+                                if (typeof log === "string") return log;
+
+                                const timestamp = log.timestamp
+                                    ? `[${formatTime(log.timestamp)}]`
+                                    : `[${getTime()}]`;
+
+                                const level = log.level
+                                    ? `[${log.level}]`
+                                    : "";
+
+                                return `${timestamp} ${level} ${log.message || ""}`;
+                            })
+                            .join("\n");
+
+                    const logBox = document.getElementById("logBox");
+                    logBox.scrollTop = logBox.scrollHeight;
+                }
+
+                if (job.summary) {
+                    updateSummary(job.summary);
+                }
+
+                updatePageTracker(job.pages || [], job.currentPage);
+
+                if (job.reportPath) {
+                    showReportLink(job.reportPath);
+                }
+
+                if (
+                    ["COMPLETED", "FAILED", "ERROR"].includes(
+                        String(job.status).toUpperCase()
+                    )
+                ) {
+                    clearInterval(pollingTimer);
+                    pollingTimer = null;
+                }
+
+            } catch (error) {
+                showMessage(error.message, "error");
+            }
+        }
+
+        function showReportLink(reportPath) {
+            if (!reportPath) return;
+
+            const link = document.getElementById("reportLink");
+            link.href = reportPath;
+            reportSection.classList.remove("hidden");
+        }
+
+        function updatePageTracker(pages, currentPage) {
+            const body = document.getElementById("pageTableBody");
+            const rows = Array.isArray(pages) ? pages : [];
+
+            if (!rows.length && !currentPage) {
+                body.innerHTML = '<tr><td colspan="4">Waiting for page data...</td></tr>';
+                document.getElementById("currentPageValue").textContent = "-";
+                return;
+            }
+
+            if (currentPage && currentPage.url) {
+                document.getElementById("currentPageValue").textContent = `${currentPage.step || "Running"} - ${currentPage.url}`;
+            }
+
+            body.innerHTML = rows.map((page, index) => {
+                const status = String(page.status || "").toUpperCase();
+                const css = status === "FAIL" ? "fail" : status === "PASS" ? "pass" : "running";
+                return `<tr>
+                    <td>${index + 1}</td>
+                    <td>${escapeHtml(page.url || "")}</td>
+                    <td>${escapeHtml(page.pageName || "")}</td>
+                    <td class="page-status ${css}">${escapeHtml(status || "Running...")}</td>
+                </tr>`;
+            }).join("");
+
+            if (currentPage && currentPage.url && !rows.some(page => page.url === currentPage.url)) {
+                body.insertAdjacentHTML("beforeend", `<tr>
+                    <td>${rows.length + 1}</td>
+                    <td>${escapeHtml(currentPage.url)}</td>
+                    <td>-</td>
+                    <td class="page-status running">Running...</td>
+                </tr>`);
+            }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function updateStatus(status) {
+            const statusElement = document.getElementById("jobStatus");
+            const normalizedStatus = String(status || "NOT_STARTED").toUpperCase();
+
+            statusElement.textContent = normalizedStatus;
+            statusElement.className = "status";
+
+            const classMap = {
+                "NOT_STARTED": "status-idle",
+                "QUEUED": "status-queued",
+                "RUNNING": "status-running",
+                "COMPLETED": "status-completed",
+                "FAILED": "status-failed",
+                "ERROR": "status-failed"
+            };
+
+            statusElement.classList.add(
+                classMap[normalizedStatus] || "status-idle"
+            );
+        }
+
+        function updateSummary(summary) {
+            document.getElementById("journeyResult").textContent =
+                summary.journey || "-";
+
+            document.getElementById("adobeResult").textContent =
+                summary.adobe || "-";
+
+            document.getElementById("ctaResult").textContent =
+                summary.cta || "-";
+
+            document.getElementById("pagesResult").textContent =
+                summary.pagesVisited ?? 0;
+
+            document.getElementById("hitsResult").textContent =
+                summary.adobeHits ?? 0;
+
+            document.getElementById("errorsResult").textContent =
+                summary.errors ?? 0;
+        }
+
+        function showMessage(message, type) {
+            const element = document.getElementById("jobMessage");
+
+            element.textContent = message;
+            element.className = "message " + type;
+        }
+
+        function formatDate(value) {
+            if (!value) return "-";
+
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+
+            return date.toLocaleString();
+        }
+
+        function formatTime(value) {
+            const date = new Date(value);
+
+            if (Number.isNaN(date.getTime())) {
+                return value;
+            }
+
+            return date.toLocaleTimeString();
+        }
+
+        function getTime() {
+            return new Date().toLocaleTimeString();
+        }
+
+        function calculateDuration(startedAt) {
+            if (!startedAt) return "-";
+
+            const durationMs = Date.now() - new Date(startedAt).getTime();
+
+            if (durationMs < 0) return "-";
+
+            const totalSeconds = Math.floor(durationMs / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+
+            return `${minutes}m ${seconds}s`;
+        }
+        async function loadLatestReport() {
+            try {
+                const response = await fetch("/api/reports/latest");
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.reportPath) showReportLink(data.reportPath);
+            } catch (_) {}
+        }
+
+        loadLatestReport();
+
+    </script>
+</body>
+</html>

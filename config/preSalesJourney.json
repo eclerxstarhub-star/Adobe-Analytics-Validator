@@ -1,0 +1,18 @@
+{
+  "startUrl": "https://starhubltd-tst1.outsystemsenterprise.com/personal/login",
+  "homeUrlPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/mobile-plans",
+  "deviceListingPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/mobile/devices",
+  "productPdpPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/mobile/devices/apple/iphone-17-pro-max",
+  "intentPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/intent-selection",
+  "starPlanPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/product-starplan",
+  "simPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/sim-selection",
+  "suggestionPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/product-suggestion-SN-UD",
+  "watchPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/store/mobile/tablets-watches/apple/watch-s11-46mm-al",
+  "reviewOrderPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/revieworder",
+  "mobileNumberPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/checkout/your-mobile-number",
+  "reviewDetailPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/checkout/reviewdetail",
+  "threeDsPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/TorpedoPayment/ThreeDSLoadingPageForWeb",
+  "successPrefix": "https://starhubltd-tst1.outsystemsenterprise.com/personal/checkout-success",
+  "productId": "304150544",
+  "payTodayPrice": "1899"
+}

@@ -1,0 +1,13 @@
+{
+  "name": "adobe-site-scanner",
+  "version": "2.0.0",
+  "description": "Selenium based Adobe Analytics implementation, CTA and fully automated StarHub Pre-Sales journey validator",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "selenium-webdriver": "^4.45.0"
+  }
+}
