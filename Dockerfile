@@ -24,4 +24,4 @@ RUN mkdir -p /app/reports/output
 
 EXPOSE 3000
 
-CMD ["xvfb-run", "-a", "node", "app.js"]
+CMD ["xvfb-run", "-a", "node", "server/server.js"]
