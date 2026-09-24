@@ -7,6 +7,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         chromium \
         xvfb \
+        xauth \
         ca-certificates \
         fonts-liberation \
         fonts-noto-color-emoji \
