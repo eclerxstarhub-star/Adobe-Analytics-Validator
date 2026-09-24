@@ -32,7 +32,3 @@ Pre-Sales output is written to `reports/output/`:
 - `preSalesJourneyReport.json` - complete machine-readable captured result.
 
 The report contains journey selections, page-level validation, CTA/option/popup actions, ecommerce events with values and URLs, ecommerce event summary, product-level validation, order-level validation, complete Adobe hit details, visited URLs and errors.
-
-## Credentials
-
-`.env` is included for the supplied UAT test account in the current project package. For another environment, update `.env` or copy `.env.example` to `.env`. Do not commit real credentials to source control.
