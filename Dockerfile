@@ -23,6 +23,8 @@ COPY . .
 
 RUN mkdir -p /app/reports/output
 
-EXPOSE 3000
+RUN chmod +x /app/docker-entrypoint.sh
 
-CMD ["xvfb-run", "-a", "node", "server/server.js"]
+EXPOSE 10000
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

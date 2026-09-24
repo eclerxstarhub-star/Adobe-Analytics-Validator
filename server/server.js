@@ -983,10 +983,6 @@ const server = app.listen(
     HOST,
     () => {
         console.log(
-            "=================================================="
-        );
-
-        console.log(
             "Adobe Analytics Validator server started"
         );
 
@@ -1003,18 +999,6 @@ const server = app.listen(
 
         console.log(
             `HOST: ${HOST}`
-        );
-
-        console.log(
-            `Health check: http://127.0.0.1:${PORT}/health`
-        );
-
-        console.log(
-            `Render health check path: /health`
-        );
-
-        console.log(
-            "=================================================="
         );
     }
 );
