@@ -2,11 +2,13 @@ const express = require("express");
 const path = require("path");
 const fs = require("fs");
 
-const PreSalesJourneyValidator = require("../scanner/preSalesJourneyValidator");
-const preSalesReportGenerator = require("../reports/preSalesReportGenerator");
-
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = "0.0.0.0";
+
+let PreSalesJourneyValidator = null;
+let preSalesReportGenerator = null;
 
 let currentJob = null;
 let activeValidator = null;
@@ -18,19 +20,48 @@ loadDotEnv();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 app.use(express.static(path.join(__dirname, "..", "public")));
-app.use("/reports", express.static(path.join(__dirname, "..", "reports", "output")));
+app.use(
+    "/reports",
+    express.static(path.join(__dirname, "..", "reports", "output"))
+);
+
+function loadRuntimeModules() {
+    if (!PreSalesJourneyValidator) {
+        PreSalesJourneyValidator = require(
+            "../scanner/preSalesJourneyValidator"
+        );
+    }
+
+    if (!preSalesReportGenerator) {
+        preSalesReportGenerator = require(
+            "../reports/preSalesReportGenerator"
+        );
+    }
+}
 
 function loadDotEnv() {
     const envPath = path.join(__dirname, "..", ".env");
-    if (!fs.existsSync(envPath)) return;
+
+    if (!fs.existsSync(envPath)) {
+        return;
+    }
 
     const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
+
     for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
+
+        if (!trimmed || trimmed.startsWith("#")) {
+            continue;
+        }
+
         const index = trimmed.indexOf("=");
-        if (index < 1) continue;
+
+        if (index < 1) {
+            continue;
+        }
 
         const key = trimmed.slice(0, index).trim();
         let value = trimmed.slice(index + 1).trim();
@@ -42,7 +73,9 @@ function loadDotEnv() {
             value = value.slice(1, -1);
         }
 
-        if (process.env[key] === undefined) process.env[key] = value;
+        if (process.env[key] === undefined) {
+            process.env[key] = value;
+        }
     }
 }
 
@@ -63,7 +96,10 @@ function createJob(inputs) {
 }
 
 function addJobLog(job, message, level = "INFO") {
-    if (!job) return;
+    if (!job) {
+        return;
+    }
+
     job.logs.push({
         timestamp: new Date().toISOString(),
         level,
@@ -76,28 +112,45 @@ function addJobLog(job, message, level = "INFO") {
 }
 
 function updateSummary(job, result) {
-    if (!job || !result) return;
+    if (!job || !result) {
+        return;
+    }
 
     const summary = result.summary || {};
+
     job.summary = {
         journey: summary.status || "-",
-        adobe: Number(summary.adobeHits || 0) > 0 ? "PASS" : "-",
+        adobe:
+            Number(summary.adobeHits || 0) > 0
+                ? "PASS"
+                : "-",
         cta: "-",
-        pagesVisited: Number(summary.pagesVisited || (result.pages || []).length || 0),
-        adobeHits: Number(summary.adobeHits || (result.hits || []).length || 0),
-        errors: Array.isArray(result.errors) ? result.errors.length : Number(summary.failed || 0)
+        pagesVisited: Number(
+            summary.pagesVisited || (result.pages || []).length || 0
+        ),
+        adobeHits: Number(
+            summary.adobeHits || (result.hits || []).length || 0
+        ),
+        errors: Array.isArray(result.errors)
+            ? result.errors.length
+            : Number(summary.failed || 0)
     };
 }
 
 function syncValidatorState(job, validator) {
-    if (!job || !validator || !validator.result) return;
+    if (!job || !validator || !validator.result) {
+        return;
+    }
 
     const result = validator.result;
-    const pages = Array.isArray(result.pages) ? result.pages : [];
+    const pages = Array.isArray(result.pages)
+        ? result.pages
+        : [];
 
     if (pages.length > job.pages.length) {
         for (let i = job.pages.length; i < pages.length; i += 1) {
             const page = pages[i];
+
             job.pages.push({
                 step: page.step || `Page ${i + 1}`,
                 url: page.url || "",
@@ -109,17 +162,24 @@ function syncValidatorState(job, validator) {
 
             addJobLog(
                 job,
-                `${page.step || `Page ${i + 1}`} completed - ${page.url || ""}`,
-                page.status === "FAIL" ? "ERROR" : "INFO"
+                `${page.step || `Page ${i + 1}`} completed - ${
+                    page.url || ""
+                }`,
+                page.status === "FAIL"
+                    ? "ERROR"
+                    : "INFO"
             );
         }
     }
 
     const currentUrl = validator.currentPageUrl || "";
+
     if (currentUrl) {
         job.currentPage = {
             url: currentUrl,
-            step: job.pages.length ? job.pages[job.pages.length - 1].step : "Starting journey",
+            step: job.pages.length
+                ? job.pages[job.pages.length - 1].step
+                : "Starting journey",
             status: "RUNNING"
         };
     }
@@ -128,9 +188,14 @@ function syncValidatorState(job, validator) {
 }
 
 function syncCompletedState(job, result) {
-    if (!job || !result) return;
+    if (!job || !result) {
+        return;
+    }
 
-    const pages = Array.isArray(result.pages) ? result.pages : [];
+    const pages = Array.isArray(result.pages)
+        ? result.pages
+        : [];
+
     job.pages = pages.map(page => ({
         step: page.step || "",
         url: page.url || "",
@@ -141,6 +206,7 @@ function syncCompletedState(job, result) {
     }));
 
     job.currentPage = null;
+
     updateSummary(job, result);
 }
 
@@ -151,7 +217,11 @@ function startValidatorMonitor(job, validator) {
         try {
             syncValidatorState(job, validator);
         } catch (error) {
-            addJobLog(job, `Monitor error: ${error.message || error}`, "WARN");
+            addJobLog(
+                job,
+                `Monitor error: ${error.message || error}`,
+                "WARN"
+            );
         }
     }, 500);
 }
@@ -163,8 +233,8 @@ function stopValidatorMonitor() {
     }
 }
 
-function normalizeResultForReport(result, reason, termination = "") {
-    const safeResult = result || {
+function createEmptyResult() {
+    return {
         startedAt: new Date().toISOString(),
         finishedAt: null,
         authentication: {},
@@ -178,33 +248,79 @@ function normalizeResultForReport(result, reason, termination = "") {
         errors: [],
         selections: []
     };
+}
+
+function normalizeResultForReport(
+    result,
+    reason,
+    termination = ""
+) {
+    const safeResult = result || createEmptyResult();
 
     safeResult.summary = safeResult.summary || {};
-    safeResult.pages = Array.isArray(safeResult.pages) ? safeResult.pages : [];
-    safeResult.actions = Array.isArray(safeResult.actions) ? safeResult.actions : [];
-    safeResult.products = Array.isArray(safeResult.products) ? safeResult.products : [];
-    safeResult.orders = Array.isArray(safeResult.orders) ? safeResult.orders : [];
-    safeResult.ecommerceEvents = Array.isArray(safeResult.ecommerceEvents) ? safeResult.ecommerceEvents : [];
-    safeResult.hits = Array.isArray(safeResult.hits) ? safeResult.hits : [];
-    safeResult.errors = Array.isArray(safeResult.errors) ? safeResult.errors : [];
-    safeResult.selections = Array.isArray(safeResult.selections) ? safeResult.selections : [];
+    safeResult.pages = Array.isArray(safeResult.pages)
+        ? safeResult.pages
+        : [];
+    safeResult.actions = Array.isArray(safeResult.actions)
+        ? safeResult.actions
+        : [];
+    safeResult.products = Array.isArray(safeResult.products)
+        ? safeResult.products
+        : [];
+    safeResult.orders = Array.isArray(safeResult.orders)
+        ? safeResult.orders
+        : [];
+    safeResult.ecommerceEvents = Array.isArray(
+        safeResult.ecommerceEvents
+    )
+        ? safeResult.ecommerceEvents
+        : [];
+    safeResult.hits = Array.isArray(safeResult.hits)
+        ? safeResult.hits
+        : [];
+    safeResult.errors = Array.isArray(safeResult.errors)
+        ? safeResult.errors
+        : [];
+    safeResult.selections = Array.isArray(
+        safeResult.selections
+    )
+        ? safeResult.selections
+        : [];
 
     safeResult.summary.status = "FAIL";
-    safeResult.summary.pagesVisited = safeResult.pages.length;
-    safeResult.summary.adobeHits = safeResult.hits.length;
-    safeResult.summary.ecommerceEvents = safeResult.ecommerceEvents.length;
-    safeResult.summary.productsCaptured = safeResult.products.length;
-    safeResult.summary.ordersCaptured = safeResult.orders.length;
-    safeResult.summary.passed = safeResult.pages.filter(page => page.status === "PASS").length;
-    safeResult.summary.failed = safeResult.pages.filter(page => page.status === "FAIL").length;
+    safeResult.summary.pagesVisited =
+        safeResult.pages.length;
+    safeResult.summary.adobeHits =
+        safeResult.hits.length;
+    safeResult.summary.ecommerceEvents =
+        safeResult.ecommerceEvents.length;
+    safeResult.summary.productsCaptured =
+        safeResult.products.length;
+    safeResult.summary.ordersCaptured =
+        safeResult.orders.length;
+    safeResult.summary.passed =
+        safeResult.pages.filter(
+            page => page.status === "PASS"
+        ).length;
+    safeResult.summary.failed =
+        safeResult.pages.filter(
+            page => page.status === "FAIL"
+        ).length;
 
     safeResult.interrupted = true;
-    safeResult.executionTerminationReason = reason || "Validation execution was interrupted.";
-    safeResult.executionTerminationType = termination || "INTERRUPTED";
+
+    safeResult.executionTerminationReason =
+        reason ||
+        "Validation execution was interrupted.";
+
+    safeResult.executionTerminationType =
+        termination || "INTERRUPTED";
 
     if (reason) {
         const alreadyLogged = safeResult.errors.some(
-            error => String(error.error || "") === String(reason)
+            error =>
+                String(error.error || "") ===
+                String(reason)
         );
 
         if (!alreadyLogged) {
@@ -212,99 +328,228 @@ function normalizeResultForReport(result, reason, termination = "") {
                 timestamp: new Date().toISOString(),
                 step: safeResult.pages.length + 1,
                 error: reason,
-                currentUrl: activeValidator && activeValidator.currentPageUrl
-                    ? activeValidator.currentPageUrl
-                    : ""
+                currentUrl:
+                    activeValidator &&
+                    activeValidator.currentPageUrl
+                        ? activeValidator.currentPageUrl
+                        : ""
             });
         }
     }
 
     safeResult.finishedAt = new Date().toISOString();
+
     return safeResult;
 }
 
-async function generateFailureReport(job, result, reason, termination = "PAGE_OR_EXECUTION_FAILURE") {
-    if (!job) return null;
+async function generateFailureReport(
+    job,
+    result,
+    reason,
+    termination = "PAGE_OR_EXECUTION_FAILURE"
+) {
+    if (!job) {
+        return null;
+    }
 
-    const reportResult = normalizeResultForReport(result, reason, termination);
-    const output = path.join(__dirname, "..", "reports", "output");
-    fs.mkdirSync(output, { recursive: true });
+    loadRuntimeModules();
 
-    const reportPath = await preSalesReportGenerator.generatePreSalesHTML(
-        reportResult,
-        output,
-        { uniqueFile: true }
+    const reportResult = normalizeResultForReport(
+        result,
+        reason,
+        termination
     );
 
-    job.reportPath = `/reports/${path.basename(reportPath)}`;
-    job.finishedAt = reportResult.finishedAt;
-    job.error = reason || null;
-    job.status = "FAILED";
-    syncCompletedState(job, reportResult);
+    const output = path.join(
+        __dirname,
+        "..",
+        "reports",
+        "output"
+    );
 
-    addJobLog(job, `Failure report generated: ${job.reportPath}`, "INFO");
+    fs.mkdirSync(output, {
+        recursive: true
+    });
+
+    const reportPath =
+        await preSalesReportGenerator.generatePreSalesHTML(
+            reportResult,
+            output,
+            {
+                uniqueFile: true
+            }
+        );
+
+    job.reportPath =
+        `/reports/${path.basename(reportPath)}`;
+
+    job.finishedAt =
+        reportResult.finishedAt;
+
+    job.error =
+        reason || null;
+
+    job.status = "FAILED";
+
+    syncCompletedState(
+        job,
+        reportResult
+    );
+
+    addJobLog(
+        job,
+        `Failure report generated: ${job.reportPath}`,
+        "INFO"
+    );
+
     return job.reportPath;
 }
 
 async function runPreSalesJourney(job) {
     job.status = "RUNNING";
-    job.startedAt = new Date().toISOString();
-    addJobLog(job, "Pre-Sales journey started.");
+    job.startedAt =
+        new Date().toISOString();
 
-    const paymentMode = job.inputs.paymentMode === "Pay Later" ? "payLater" : "payToday";
+    addJobLog(
+        job,
+        "Pre-Sales journey started."
+    );
 
-    const validator = new PreSalesJourneyValidator({
-        startUrl: process.env.PRESALES_START_URL,
-        maxAdobeWait: 60000,
-        networkQuietTime: 4000,
-        pollInterval: 250,
-        credentials: {
-            hubId: job.inputs.hubId,
-            hubPassword: process.env.HUB_PASSWORD
-        },
-        journeyConfig: require("../config/preSalesJourney.json"),
-        paymentOptionPrompt: async () => paymentMode === "payLater" ? "1" : "2",
-        payLaterPeriod: paymentMode === "payLater" ? job.inputs.paymentPeriod : null,
-        simType: job.inputs.simType
-    });
-
-    activeValidator = validator;
-    startValidatorMonitor(job, validator);
-
-    let result;
     let journeyError = null;
 
     try {
-        result = await validator.run();
-        syncCompletedState(job, result);
+        loadRuntimeModules();
 
-        const output = path.join(__dirname, "..", "reports", "output");
-        fs.mkdirSync(output, { recursive: true });
+        const paymentMode =
+            job.inputs.paymentMode === "Pay Later"
+                ? "payLater"
+                : "payToday";
 
-        const reportPath = await preSalesReportGenerator.generatePreSalesHTML(
-            result,
-            output,
-            { uniqueFile: true }
+        const validator =
+            new PreSalesJourneyValidator({
+                startUrl:
+                    process.env.PRESALES_START_URL,
+
+                maxAdobeWait: 60000,
+
+                networkQuietTime: 4000,
+
+                pollInterval: 250,
+
+                credentials: {
+                    hubId:
+                        job.inputs.hubId,
+
+                    hubPassword:
+                        process.env.HUB_PASSWORD
+                },
+
+                journeyConfig:
+                    require(
+                        "../config/preSalesJourney.json"
+                    ),
+
+                paymentOptionPrompt:
+                    async () =>
+                        paymentMode === "payLater"
+                            ? "1"
+                            : "2",
+
+                payLaterPeriod:
+                    paymentMode === "payLater"
+                        ? job.inputs.paymentPeriod
+                        : null,
+
+                simType:
+                    job.inputs.simType
+            });
+
+        activeValidator = validator;
+
+        startValidatorMonitor(
+            job,
+            validator
         );
 
-        job.reportPath = `/reports/${path.basename(reportPath)}`;
-        job.status = result.summary && result.summary.status === "FAIL" ? "FAILED" : "COMPLETED";
-        job.finishedAt = result.finishedAt || new Date().toISOString();
-        job.error = job.status === "FAILED" && result.errors && result.errors.length
-            ? result.errors[result.errors.length - 1].error
-            : null;
+        const result =
+            await validator.run();
 
-        addJobLog(job, `Validation finished with status ${job.status}.`);
-        addJobLog(job, `Report generated: ${job.reportPath}`);
+        syncCompletedState(
+            job,
+            result
+        );
+
+        const output =
+            path.join(
+                __dirname,
+                "..",
+                "reports",
+                "output"
+            );
+
+        fs.mkdirSync(output, {
+            recursive: true
+        });
+
+        const reportPath =
+            await preSalesReportGenerator.generatePreSalesHTML(
+                result,
+                output,
+                {
+                    uniqueFile: true
+                }
+            );
+
+        job.reportPath =
+            `/reports/${path.basename(reportPath)}`;
+
+        job.status =
+            result.summary &&
+            result.summary.status === "FAIL"
+                ? "FAILED"
+                : "COMPLETED";
+
+        job.finishedAt =
+            result.finishedAt ||
+            new Date().toISOString();
+
+        job.error =
+            job.status === "FAILED" &&
+            result.errors &&
+            result.errors.length
+                ? result.errors[
+                      result.errors.length - 1
+                  ].error
+                : null;
+
+        addJobLog(
+            job,
+            `Validation finished with status ${job.status}.`
+        );
+
+        addJobLog(
+            job,
+            `Report generated: ${job.reportPath}`
+        );
     } catch (error) {
         journeyError = error;
-        result = validator.result;
 
-        const reason = error && error.message
-            ? error.message
-            : String(error);
+        const result =
+            activeValidator &&
+            activeValidator.result
+                ? activeValidator.result
+                : createEmptyResult();
 
-        addJobLog(job, `Journey stopped: ${reason}`, "ERROR");
+        const reason =
+            error && error.message
+                ? error.message
+                : String(error);
+
+        addJobLog(
+            job,
+            `Journey stopped: ${reason}`,
+            "ERROR"
+        );
 
         try {
             await generateFailureReport(
@@ -315,12 +560,28 @@ async function runPreSalesJourney(job) {
             );
         } catch (reportError) {
             job.status = "FAILED";
-            job.finishedAt = new Date().toISOString();
-            job.error = `${reason} | Report generation failed: ${reportError.message || reportError}`;
-            addJobLog(job, `Report generation failed: ${reportError.message || reportError}`, "ERROR");
+
+            job.finishedAt =
+                new Date().toISOString();
+
+            job.error =
+                `${reason} | Report generation failed: ${
+                    reportError.message ||
+                    reportError
+                }`;
+
+            addJobLog(
+                job,
+                `Report generation failed: ${
+                    reportError.message ||
+                    reportError
+                }`,
+                "ERROR"
+            );
         }
     } finally {
         stopValidatorMonitor();
+
         activeValidator = null;
 
         if (journeyError) {
@@ -330,28 +591,67 @@ async function runPreSalesJourney(job) {
 }
 
 function serializeJob(job) {
-    if (!job) return null;
+    if (!job) {
+        return null;
+    }
 
-    const startedAt = job.startedAt ? new Date(job.startedAt) : null;
-    const finishedAt = job.finishedAt ? new Date(job.finishedAt) : null;
+    const startedAt = job.startedAt
+        ? new Date(job.startedAt)
+        : null;
+
+    const finishedAt = job.finishedAt
+        ? new Date(job.finishedAt)
+        : null;
+
     let duration = null;
 
     if (startedAt) {
-        const endTime = finishedAt || new Date();
-        const totalSeconds = Math.max(
-            0,
-            Math.floor((endTime.getTime() - startedAt.getTime()) / 1000)
-        );
-        duration = `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`;
+        const endTime =
+            finishedAt || new Date();
+
+        const totalSeconds =
+            Math.max(
+                0,
+                Math.floor(
+                    (
+                        endTime.getTime() -
+                        startedAt.getTime()
+                    ) / 1000
+                )
+            );
+
+        duration =
+            `${Math.floor(
+                totalSeconds / 60
+            )}m ${
+                totalSeconds % 60
+            }s`;
     }
 
-    let currentStep = "Waiting to start";
-    if (job.status === "QUEUED") currentStep = "Job queued";
-    if (job.status === "RUNNING") currentStep = job.currentPage && job.currentPage.step
-        ? job.currentPage.step
-        : "Executing Selenium journey";
-    if (job.status === "COMPLETED") currentStep = "Validation completed";
-    if (job.status === "FAILED") currentStep = "Validation failed";
+    let currentStep =
+        "Waiting to start";
+
+    if (job.status === "QUEUED") {
+        currentStep = "Job queued";
+    }
+
+    if (job.status === "RUNNING") {
+        currentStep =
+            job.currentPage &&
+            job.currentPage.step
+                ? job.currentPage.step
+                : "Executing Selenium journey";
+    }
+
+    if (job.status === "COMPLETED") {
+        currentStep =
+            "Validation completed";
+    }
+
+    if (job.status === "FAILED") {
+        currentStep =
+            "Validation failed";
+    }
 
     return {
         jobId: job.id,
@@ -373,206 +673,443 @@ function serializeJob(job) {
 }
 
 function findLatestReport() {
-    const output = path.join(__dirname, "..", "reports", "output");
-    if (!fs.existsSync(output)) return null;
+    const output =
+        path.join(
+            __dirname,
+            "..",
+            "reports",
+            "output"
+        );
 
-    const reports = fs.readdirSync(output)
-        .filter(name => name.toLowerCase().endsWith(".html"))
-        .map(name => {
-            const fullPath = path.join(output, name);
-            return {
-                name,
-                mtime: fs.statSync(fullPath).mtimeMs
-            };
-        })
-        .sort((a, b) => b.mtime - a.mtime);
+    if (!fs.existsSync(output)) {
+        return null;
+    }
 
-    return reports.length ? `/reports/${encodeURIComponent(reports[0].name)}` : null;
+    const reports =
+        fs.readdirSync(output)
+            .filter(
+                name =>
+                    name
+                        .toLowerCase()
+                        .endsWith(".html")
+            )
+            .map(name => {
+                const fullPath =
+                    path.join(output, name);
+
+                return {
+                    name,
+                    mtime:
+                        fs.statSync(
+                            fullPath
+                        ).mtimeMs
+                };
+            })
+            .sort(
+                (a, b) =>
+                    b.mtime - a.mtime
+            );
+
+    return reports.length
+        ? `/reports/${encodeURIComponent(
+              reports[0].name
+          )}`
+        : null;
 }
 
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "..", "public", "index.html"));
-});
+/*
+|--------------------------------------------------------------------------
+| Routes
+|--------------------------------------------------------------------------
+*/
 
-app.get("/api/reports/latest", (req, res) => {
-    res.json({
+app.get("/health", (req, res) => {
+    res.status(200).json({
         success: true,
-        reportPath: currentJob && currentJob.reportPath
-            ? currentJob.reportPath
-            : findLatestReport()
+        status: "UP",
+        service: "Adobe Analytics Validator",
+        port: PORT,
+        timestamp:
+            new Date().toISOString()
     });
 });
 
-app.post("/api/jobs", (req, res) => {
-    const { mode, hubId, paymentMode, paymentPeriod, simType } = req.body;
+app.get("/", (req, res) => {
+    res.sendFile(
+        path.join(
+            __dirname,
+            "..",
+            "public",
+            "index.html"
+        )
+    );
+});
 
-    if (mode && mode !== "presales") {
+app.get(
+    "/api/reports/latest",
+    (req, res) => {
+        res.json({
+            success: true,
+            reportPath:
+                currentJob &&
+                currentJob.reportPath
+                    ? currentJob.reportPath
+                    : findLatestReport()
+        });
+    }
+);
+
+app.post("/api/jobs", (req, res) => {
+    const {
+        mode,
+        hubId,
+        paymentMode,
+        paymentPeriod,
+        simType
+    } = req.body;
+
+    if (
+        mode &&
+        mode !== "presales"
+    ) {
         return res.status(400).json({
             success: false,
-            error: "Only Pre-Sales Journey Validation is currently supported."
+            error:
+                "Only Pre-Sales Journey Validation is currently supported."
         });
     }
 
-    if (!hubId || !paymentMode || !simType) {
+    if (
+        !hubId ||
+        !paymentMode ||
+        !simType
+    ) {
         return res.status(400).json({
             success: false,
-            error: "Hub ID, payment mode, and SIM type are required."
+            error:
+                "Hub ID, payment mode, and SIM type are required."
         });
     }
 
     if (
         currentJob &&
-        ["QUEUED", "RUNNING"].includes(currentJob.status)
+        ["QUEUED", "RUNNING"].includes(
+            currentJob.status
+        )
     ) {
         return res.status(409).json({
             success: false,
-            error: "Another journey is currently running. Please wait."
+            error:
+                "Another journey is currently running. Please wait."
         });
     }
 
     currentJob = createJob({
         hubId,
         paymentMode,
-        paymentPeriod: paymentMode === "Pay Later" ? paymentPeriod || null : null,
+        paymentPeriod:
+            paymentMode === "Pay Later"
+                ? paymentPeriod || null
+                : null,
         simType
     });
 
-    addJobLog(currentJob, "Job created and queued.");
+    addJobLog(
+        currentJob,
+        "Job created and queued."
+    );
 
-    runPreSalesJourney(currentJob).catch(async error => {
-        const reason = error && error.message ? error.message : String(error);
-        addJobLog(currentJob, `Unexpected journey error: ${reason}`, "ERROR");
+    runPreSalesJourney(
+        currentJob
+    ).catch(async error => {
+        const reason =
+            error && error.message
+                ? error.message
+                : String(error);
 
-        if (activeValidator && activeValidator.result) {
-            try {
-                await generateFailureReport(
-                    currentJob,
-                    activeValidator.result,
-                    reason,
-                    "UNEXPECTED_SERVER_EXECUTION_ERROR"
-                );
-            } catch (reportError) {
-                currentJob.status = "FAILED";
-                currentJob.finishedAt = new Date().toISOString();
-                currentJob.error = `${reason} | Report generation failed: ${reportError.message || reportError}`;
-            }
-        } else {
+        addJobLog(
+            currentJob,
+            `Unexpected journey error: ${reason}`,
+            "ERROR"
+        );
+
+        try {
+            await generateFailureReport(
+                currentJob,
+                activeValidator
+                    ? activeValidator.result
+                    : null,
+                reason,
+                "UNEXPECTED_SERVER_EXECUTION_ERROR"
+            );
+        } catch (reportError) {
             currentJob.status = "FAILED";
-            currentJob.finishedAt = new Date().toISOString();
-            currentJob.error = reason;
+
+            currentJob.finishedAt =
+                new Date().toISOString();
+
+            currentJob.error =
+                `${reason} | Report generation failed: ${
+                    reportError.message ||
+                    reportError
+                }`;
         }
     });
 
     return res.status(202).json({
         success: true,
-        message: "Selenium journey queued successfully.",
+        message:
+            "Selenium journey queued successfully.",
         jobId: currentJob.id,
         status: currentJob.status,
-        startedAt: currentJob.startedAt
+        startedAt:
+            currentJob.startedAt
     });
 });
 
-app.get("/api/jobs/:jobId", (req, res) => {
-    if (!currentJob || currentJob.id !== req.params.jobId) {
-        return res.status(404).json({
-            success: false,
-            error: "Job not found."
+app.get(
+    "/api/jobs/:jobId",
+    (req, res) => {
+        if (
+            !currentJob ||
+            currentJob.id !==
+                req.params.jobId
+        ) {
+            return res.status(404).json({
+                success: false,
+                error:
+                    "Job not found."
+            });
+        }
+
+        syncValidatorState(
+            currentJob,
+            activeValidator
+        );
+
+        return res.json(
+            serializeJob(currentJob)
+        );
+    }
+);
+
+app.post(
+    "/api/journeys",
+    (req, res) => {
+        const {
+            hubId,
+            paymentMode,
+            paymentPeriod,
+            simType
+        } = req.body;
+
+        if (
+            !hubId ||
+            !paymentMode ||
+            !simType
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Hub ID, payment mode, and SIM type are required."
+            });
+        }
+
+        if (
+            currentJob &&
+            ["QUEUED", "RUNNING"].includes(
+                currentJob.status
+            )
+        ) {
+            return res.status(409).json({
+                success: false,
+                message:
+                    "Another journey is currently running. Please wait."
+            });
+        }
+
+        currentJob = createJob({
+            hubId,
+            paymentMode,
+            paymentPeriod:
+                paymentMode === "Pay Later"
+                    ? paymentPeriod || null
+                    : null,
+            simType
+        });
+
+        addJobLog(
+            currentJob,
+            "Journey created through /api/journeys."
+        );
+
+        void runPreSalesJourney(
+            currentJob
+        );
+
+        return res.json({
+            success: true,
+            message:
+                "Selenium journey started successfully.",
+            jobId: currentJob.id,
+            status: currentJob.status
         });
     }
+);
 
-    syncValidatorState(currentJob, activeValidator);
-    return res.json(serializeJob(currentJob));
-});
-
-app.post("/api/journeys", (req, res) => {
-    const { hubId, paymentMode, paymentPeriod, simType } = req.body;
-
-    if (!hubId || !paymentMode || !simType) {
-        return res.status(400).json({
-            success: false,
-            message: "Hub ID, payment mode, and SIM type are required."
+app.get(
+    "/api/journeys/current",
+    (req, res) => {
+        return res.json({
+            success: true,
+            job:
+                currentJob
+                    ? serializeJob(
+                          currentJob
+                      )
+                    : null
         });
     }
+);
 
-    if (currentJob && ["QUEUED", "RUNNING"].includes(currentJob.status)) {
-        return res.status(409).json({
-            success: false,
-            message: "Another journey is currently running. Please wait."
-        });
+/*
+|--------------------------------------------------------------------------
+| Start Web Server
+|--------------------------------------------------------------------------
+*/
+
+const server = app.listen(
+    PORT,
+    HOST,
+    () => {
+        console.log(
+            "=================================================="
+        );
+
+        console.log(
+            "Adobe Analytics Validator server started"
+        );
+
+        console.log(
+            `Environment: ${
+                process.env.NODE_ENV ||
+                "development"
+            }`
+        );
+
+        console.log(
+            `PORT: ${PORT}`
+        );
+
+        console.log(
+            `HOST: ${HOST}`
+        );
+
+        console.log(
+            `Health check: http://127.0.0.1:${PORT}/health`
+        );
+
+        console.log(
+            `Render health check path: /health`
+        );
+
+        console.log(
+            "=================================================="
+        );
     }
+);
 
-    currentJob = createJob({
-        hubId,
-        paymentMode,
-        paymentPeriod: paymentMode === "Pay Later" ? paymentPeriod || null : null,
-        simType
-    });
-
-    addJobLog(currentJob, "Journey created through /api/journeys.");
-
-    void runPreSalesJourney(currentJob);
-
-    return res.json({
-        success: true,
-        message: "Selenium journey started successfully.",
-        jobId: currentJob.id,
-        status: currentJob.status
-    });
+server.on("error", error => {
+    console.error(
+        "Web server error:",
+        error
+    );
 });
 
-app.get("/api/journeys/current", (req, res) => {
-    return res.json({
-        success: true,
-        job: currentJob ? serializeJob(currentJob) : null
-    });
-});
-
-const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Web server running at http://localhost:${PORT}`);
-});
+/*
+|--------------------------------------------------------------------------
+| Graceful Shutdown
+|--------------------------------------------------------------------------
+*/
 
 async function gracefulShutdown(signal) {
-    if (shutdownInProgress) return;
+    if (shutdownInProgress) {
+        return;
+    }
+
     shutdownInProgress = true;
 
-    console.log(`\n${signal} received. Preparing safe shutdown...`);
+    console.log(
+        `\n${signal} received. Preparing safe shutdown...`
+    );
 
     try {
         stopValidatorMonitor();
 
         if (
             currentJob &&
-            ["QUEUED", "RUNNING"].includes(currentJob.status) &&
-            activeValidator
+            ["QUEUED", "RUNNING"].includes(
+                currentJob.status
+            )
         ) {
-            syncValidatorState(currentJob, activeValidator);
+            const reason =
+                `Execution interrupted because the server received ${signal}.`;
 
-            const reason = `Execution interrupted because the server received ${signal}.`;
-            addJobLog(currentJob, reason, "ERROR");
+            addJobLog(
+                currentJob,
+                reason,
+                "ERROR"
+            );
+
+            const partialResult =
+                activeValidator &&
+                activeValidator.result
+                    ? activeValidator.result
+                    : createEmptyResult();
 
             try {
-                const reportPath = await generateFailureReport(
-                    currentJob,
-                    activeValidator.result,
-                    reason,
-                    "SERVER_STOP"
+                const reportPath =
+                    await generateFailureReport(
+                        currentJob,
+                        partialResult,
+                        reason,
+                        "SERVER_STOP"
+                    );
+
+                console.log(
+                    `Partial validation report generated: ${reportPath}`
                 );
-                console.log(`Partial validation report generated: ${reportPath}`);
             } catch (reportError) {
-                console.error("Unable to generate interruption report:", reportError);
+                console.error(
+                    "Unable to generate interruption report:",
+                    reportError
+                );
             }
 
-            try {
-                await activeValidator.close();
-            } catch (closeError) {
-                console.error("Unable to close Selenium driver:", closeError);
+            if (activeValidator) {
+                try {
+                    await activeValidator.close();
+                } catch (closeError) {
+                    console.error(
+                        "Unable to close Selenium driver:",
+                        closeError
+                    );
+                }
             }
         }
     } catch (error) {
-        console.error("Graceful shutdown report handling failed:", error);
+        console.error(
+            "Graceful shutdown report handling failed:",
+            error
+        );
     } finally {
         try {
-            await new Promise(resolve => server.close(resolve));
+            await new Promise(
+                resolve =>
+                    server.close(
+                        resolve
+                    )
+            );
         } catch (_) {}
 
         process.exit(0);
@@ -580,52 +1117,106 @@ async function gracefulShutdown(signal) {
 }
 
 process.on("SIGINT", () => {
-    void gracefulShutdown("SIGINT");
+    void gracefulShutdown(
+        "SIGINT"
+    );
 });
 
 process.on("SIGTERM", () => {
-    void gracefulShutdown("SIGTERM");
+    void gracefulShutdown(
+        "SIGTERM"
+    );
 });
 
-process.on("uncaughtException", async error => {
-    console.error("Uncaught exception:", error);
-    if (uncaughtHandling) return;
-    uncaughtHandling = true;
+process.on(
+    "uncaughtException",
+    async error => {
+        console.error(
+            "Uncaught exception:",
+            error
+        );
 
-    if (activeValidator && currentJob) {
-        try {
-            await generateFailureReport(
-                currentJob,
-                activeValidator.result,
-                `Uncaught server exception: ${error.message || error}`,
-                "UNCAUGHT_EXCEPTION"
-            );
-        } catch (reportError) {
-            console.error("Uncaught exception report generation failed:", reportError);
+        if (uncaughtHandling) {
+            return;
         }
-    }
 
-    await gracefulShutdown("UNCAUGHT_EXCEPTION");
-});
+        uncaughtHandling = true;
 
-process.on("unhandledRejection", async reason => {
-    const error = reason instanceof Error ? reason : new Error(String(reason));
-    console.error("Unhandled rejection:", error);
-    if (uncaughtHandling) return;
-    uncaughtHandling = true;
-
-    if (activeValidator && currentJob) {
-        try {
-            await generateFailureReport(
-                currentJob,
-                activeValidator.result,
-                `Unhandled server rejection: ${error.message || error}`,
-                "UNHANDLED_REJECTION"
-            );
-        } catch (reportError) {
-            console.error("Unhandled rejection report generation failed:", reportError);
+        if (
+            currentJob
+        ) {
+            try {
+                await generateFailureReport(
+                    currentJob,
+                    activeValidator
+                        ? activeValidator.result
+                        : null,
+                    `Uncaught server exception: ${
+                        error.message ||
+                        error
+                    }`,
+                    "UNCAUGHT_EXCEPTION"
+                );
+            } catch (reportError) {
+                console.error(
+                    "Uncaught exception report generation failed:",
+                    reportError
+                );
+            }
         }
-    }
 
-    await gracefulShutdown("UNHANDLED_REJECTION");
-});
+        await gracefulShutdown(
+            "UNCAUGHT_EXCEPTION"
+        );
+    }
+);
+
+process.on(
+    "unhandledRejection",
+    async reason => {
+        const error =
+            reason instanceof Error
+                ? reason
+                : new Error(
+                      String(reason)
+                  );
+
+        console.error(
+            "Unhandled rejection:",
+            error
+        );
+
+        if (uncaughtHandling) {
+            return;
+        }
+
+        uncaughtHandling = true;
+
+        if (
+            currentJob
+        ) {
+            try {
+                await generateFailureReport(
+                    currentJob,
+                    activeValidator
+                        ? activeValidator.result
+                        : null,
+                    `Unhandled server rejection: ${
+                        error.message ||
+                        error
+                    }`,
+                    "UNHANDLED_REJECTION"
+                );
+            } catch (reportError) {
+                console.error(
+                    "Unhandled rejection report generation failed:",
+                    reportError
+                );
+            }
+        }
+
+        await gracefulShutdown(
+            "UNHANDLED_REJECTION"
+        );
+    }
+);
