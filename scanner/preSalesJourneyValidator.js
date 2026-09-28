@@ -41,25 +41,7 @@ class PreSalesJourneyValidator {
         this.lastRecordedPageName = "";
     }
 
-    async createDriver() {
-        if (this.driver) return this.driver;
-        const options = new chrome.Options();
-        options.addArguments(
-            "--start-maximized",
-            "--disable-gpu",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-popup-blocking",
-            "--disable-notifications",
-            "--disable-background-networking",
-            "--disable-background-timer-throttling",
-            "--disable-renderer-backgrounding",
-            "--disable-features=TranslateUI"
-        );
-        options.setLoggingPrefs({ performance: "ALL", browser: "ALL" });
-        this.driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
-        return this.driver;
-    }
+    async createDriver(){if(this.driver)return this.driver;const options=new chrome.Options();options.addArguments("--headless=new","--no-sandbox","--disable-dev-shm-usage","--disable-gpu","--window-size=1920,1080","--disable-popup-blocking","--disable-notifications","--disable-background-networking","--disable-background-timer-throttling","--disable-renderer-backgrounding","--disable-features=TranslateUI");options.setLoggingPrefs({performance:"ALL",browser:"ALL"});this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();return this.driver;}
 
     async close() {
         if (!this.driver) return;
