@@ -519,115 +519,243 @@ class PreSalesJourneyValidator {
         this.recordAction("CTA", actionLabel || name, "", hits, this.currentPageUrl);
         return hits;
     }
-    async login() {
-        console.log("\n[1] Login");
-        await this.drainPerformanceLogs();
-        await this.driver.get(this.startUrl);
-        await this.waitForPageReady(30000);
-        let currentUrl = await this.driver.getCurrentUrl();
-        if (/invalid-permissions/i.test(currentUrl)) {
-            this.result.authentication = {
-                status: "FAILED",
-                account: "Test Account",
-                reason: "Environment redirected to invalid-permissions",
-                url: currentUrl
-            };
-            throw new Error(`Login page redirected to invalid-permissions: ${currentUrl}`);
-        }
-        const findVisibleInput = async (selectors, timeout = 30000) => {
-            const start = Date.now();
-            while (Date.now() - start < timeout) {
-                for (const selector of selectors) {
-                    try {
-                        const elements = await this.driver.findElements(By.css(selector));
-                        for (const el of elements) {
-                            if (await el.isDisplayed() && await el.isEnabled()) return el;
-                        }
-                    } catch (_) {}
-                }
-                try {
-                    const frames = await this.driver.findElements(By.css("iframe"));
-                    for (const frame of frames) {
-                        try {
-                            await this.driver.switchTo().frame(frame);
-                            for (const selector of selectors) {
-                                const elements = await this.driver.findElements(By.css(selector));
-                                for (const el of elements) {
-                                    if (await el.isDisplayed() && await el.isEnabled()) return el;
-                                }
-                            }
-                            await this.driver.switchTo().defaultContent();
-                        } catch (_) {
-                            try {
-                                await this.driver.switchTo().defaultContent();
-                            } catch (_) {}
-                        }
-                    }
-                } catch (_) {}
-                await this.sleep(500);
-            }
-            return null;
-        };
-        const email = await findVisibleInput(["input[type='email']", "input[name*='email' i]", "input[id*='email' i]", "input[name*='user' i]", "input[id*='user' i]", "input[autocomplete='username']", "input[type='text']"]);
-        const password = await findVisibleInput(["input[type='password']", "input[autocomplete='current-password']"]);
-        try {
-            await this.driver.switchTo().defaultContent();
-        } catch (_) {}
-        currentUrl = await this.driver.getCurrentUrl();
-        if (/invalid-permissions/i.test(currentUrl)) {
-            this.result.authentication = {
-                status: "FAILED",
-                account: "Test Account",
-                reason: "Environment redirected to invalid-permissions",
-                url: currentUrl
-            };
-            throw new Error(`Login fields unavailable because environment redirected to invalid-permissions: ${currentUrl}`);
-        }
-        if (!email || !password) {
-            this.result.authentication = {
-                status: "FAILED",
-                account: "Test Account",
-                reason: "Login fields not found",
-                url: currentUrl
-            };
-            throw new Error(`Login fields not found. Username: ${email ? "FOUND" : "NOT FOUND"}, Password: ${password ? "FOUND" : "NOT FOUND"}, URL: ${currentUrl}`);
-        }
-        await email.clear();
-        await email.sendKeys(this.credentials.hubId || "");
-        await password.clear();
-        await password.sendKeys(this.credentials.hubPassword || "Slice1234");
-        const buttons = await this.visibleElements(By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']"));
-        if (buttons.length) {
-            await this.drainPerformanceLogs();
-            await this.clickElement(buttons[0], "Login");
-            const hits = await this.captureAdobeWindow("Login CTA");
-            this.recordAction("CTA", "Login", "", hits, await this.driver.getCurrentUrl());
-        } else {
-            await this.drainPerformanceLogs();
-            await password.sendKeys(Key.ENTER);
-            const hits = await this.captureAdobeWindow("Login CTA");
-            this.recordAction("CTA", "Login", "", hits, await this.driver.getCurrentUrl());
-        }
-        await this.sleep(1500);
-        currentUrl = await this.driver.getCurrentUrl();
-        if (/invalid-permissions/i.test(currentUrl)) {
-            this.result.authentication = {
-                status: "FAILED",
-                account: "Test Account",
-                reason: "Environment redirected to invalid-permissions after login",
-                url: currentUrl
-            };
-            throw new Error(`Login redirected to invalid-permissions: ${currentUrl}`);
-        }
-        await this.waitForUrlPrefix(this.homeUrlPrefix, 90000);
-        this.currentPageUrl = await this.driver.getCurrentUrl();
-        console.log("    Login successful. Landed on: " + this.currentPageUrl);
-        this.result.authentication = {
-            status: "SUCCESS",
-            account: "Test Account",
-            url: this.currentPageUrl
-        };
-    }
+    
+    async login(){
+console.log("\n[1] Login");
+await this.drainPerformanceLogs();
+
+const hubId=String(this.credentials.hubId||"").trim();
+const hubPassword=String(this.credentials.hubPassword||"");
+
+console.log(`    Hub ID provided: ${hubId?"YES":"NO"}`);
+console.log(`    Hub Password provided: ${hubPassword?"YES":"NO"}`);
+console.log(`    Login URL: ${this.startUrl}`);
+
+if(!hubId)throw new Error("Hub ID was not provided to the Pre-Sales validator.");
+if(!hubPassword)throw new Error("Hub password was not provided to the Pre-Sales validator. Please configure HUB_PASSWORD in the server environment.");
+
+const loadLoginPage=async()=>{
+await this.drainPerformanceLogs();
+console.log(`    Navigating to login page: ${this.startUrl}`);
+await this.driver.get(this.startUrl);
+await this.waitForPageReady(30000);
+await this.sleep(2000);
+
+const url=await this.driver.getCurrentUrl();
+const title=await this.driver.getTitle().catch(()=>"");
+
+console.log(`    Login page final URL: ${url}`);
+console.log(`    Login page title: ${title||"N/A"}`);
+
+return{url,title};
+};
+
+let page=await loadLoginPage();
+
+if(/\/_error\.html/i.test(page.url)){
+console.log("    WARNING: TST site redirected Selenium to /_error.html.");
+console.log("    Retrying login page once...");
+await this.sleep(3000);
+page=await loadLoginPage();
+}
+
+if(/\/_error\.html/i.test(page.url)){
+let bodyText="";
+try{
+bodyText=await this.driver.findElement(By.css("body")).getText();
+}catch(e){}
+
+let html="";
+try{
+html=await this.driver.getPageSource();
+}catch(e){}
+
+console.log(`    ERROR PAGE BODY: ${String(bodyText||"").replace(/\s+/g," ").slice(0,1000)}`);
+console.log(`    ERROR PAGE HTML LENGTH: ${html.length}`);
+
+this.result.authentication={
+status:"FAILED",
+account:"Test Account",
+reason:"Environment redirected to /_error.html before login fields were available",
+url:page.url,
+title:page.title,
+hubIdProvided:!!hubId,
+hubPasswordProvided:!!hubPassword,
+errorPageText:String(bodyText||"").replace(/\s+/g," ").slice(0,1000)
+};
+
+throw new Error(`Login page redirected to /_error.html. URL: ${page.url}. Title: ${page.title||"N/A"}`);
+}
+
+const findLoginElement=async(selectors,timeout=30000)=>{
+const start=Date.now();
+
+while(Date.now()-start<timeout){
+try{
+for(const selector of selectors){
+const elements=await this.driver.findElements(By.css(selector));
+
+for(const element of elements){
+try{
+if(await element.isDisplayed()&&await element.isEnabled())return element;
+}catch(e){}
+}
+}
+}catch(e){}
+
+try{
+const frames=await this.driver.findElements(By.css("iframe"));
+
+for(const frame of frames){
+try{
+await this.driver.switchTo().defaultContent();
+await this.driver.switchTo().frame(frame);
+
+for(const selector of selectors){
+const elements=await this.driver.findElements(By.css(selector));
+
+for(const element of elements){
+try{
+if(await element.isDisplayed()&&await element.isEnabled())return element;
+}catch(e){}
+}
+}
+
+await this.driver.switchTo().defaultContent();
+}catch(e){
+try{
+await this.driver.switchTo().defaultContent();
+}catch(e){}
+}
+}
+}catch(e){}
+
+await this.sleep(500);
+}
+
+return null;
+};
+
+const username=await findLoginElement([
+"input[type='email']",
+"input[name*='email' i]",
+"input[id*='email' i]",
+"input[name*='user' i]",
+"input[id*='user' i]",
+"input[autocomplete='username']",
+"input[type='text']"
+]);
+
+const password=await findLoginElement([
+"input[type='password']",
+"input[autocomplete='current-password']"
+]);
+
+try{
+await this.driver.switchTo().defaultContent();
+}catch(e){}
+
+const finalUrl=await this.driver.getCurrentUrl();
+const finalTitle=await this.driver.getTitle().catch(()=>"");
+
+console.log(`    Login form URL: ${finalUrl}`);
+console.log(`    Login form title: ${finalTitle||"N/A"}`);
+console.log(`    Username field: ${username?"FOUND":"NOT FOUND"}`);
+console.log(`    Password field: ${password?"FOUND":"NOT FOUND"}`);
+
+if(/\/_error\.html/i.test(finalUrl)){
+this.result.authentication={
+status:"FAILED",
+account:"Test Account",
+reason:"Environment redirected to /_error.html while locating login fields",
+url:finalUrl,
+title:finalTitle
+};
+throw new Error(`Login fields unavailable because environment redirected to /_error.html: ${finalUrl}`);
+}
+
+if(!username||!password){
+let bodyText="";
+try{
+bodyText=await this.driver.findElement(By.css("body")).getText();
+}catch(e){}
+
+this.result.authentication={
+status:"FAILED",
+account:"Test Account",
+reason:"Login fields not found",
+url:finalUrl,
+title:finalTitle,
+usernameFound:!!username,
+passwordFound:!!password,
+bodyText:String(bodyText||"").replace(/\s+/g," ").slice(0,1000)
+};
+
+throw new Error(`Login fields not found. Username: ${username?"FOUND":"NOT FOUND"}, Password: ${password?"FOUND":"NOT FOUND"}, URL: ${finalUrl}`);
+}
+
+console.log("    Entering Hub ID...");
+await username.clear();
+await username.sendKeys(hubId);
+
+console.log("    Entering Hub password...");
+await password.clear();
+await password.sendKeys(hubPassword);
+
+const loginButtons=await this.visibleElements(
+By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']")
+);
+
+if(loginButtons.length){
+await this.drainPerformanceLogs();
+await this.clickElement(loginButtons[0],"Login");
+const hits=await this.captureAdobeWindow("Login CTA");
+this.recordAction("CTA","Login","",hits,await this.driver.getCurrentUrl());
+}else{
+await this.drainPerformanceLogs();
+await password.sendKeys(Key.ENTER);
+const hits=await this.captureAdobeWindow("Login CTA");
+this.recordAction("CTA","Login","",hits,await this.driver.getCurrentUrl());
+}
+
+await this.sleep(1500);
+
+const postLoginUrl=await this.driver.getCurrentUrl();
+console.log(`    Post-login URL: ${postLoginUrl}`);
+
+if(/\/_error\.html/i.test(postLoginUrl)){
+let bodyText="";
+try{
+bodyText=await this.driver.findElement(By.css("body")).getText();
+}catch(e){}
+
+this.result.authentication={
+status:"FAILED",
+account:"Test Account",
+reason:"Environment redirected to /_error.html after login",
+url:postLoginUrl,
+title:await this.driver.getTitle().catch(()=>""),
+errorPageText:String(bodyText||"").replace(/\s+/g," ").slice(0,1000)
+};
+
+throw new Error(`Login redirected to /_error.html after credentials were submitted: ${postLoginUrl}`);
+}
+
+await this.waitForUrlPrefix(this.homeUrlPrefix,90000);
+
+this.currentPageUrl=await this.driver.getCurrentUrl();
+
+console.log("    Login successful. Landed on: "+this.currentPageUrl);
+
+this.result.authentication={
+status:"SUCCESS",
+account:"Test Account",
+url:this.currentPageUrl,
+hubIdProvided:true,
+hubPasswordProvided:true
+};
+}
+
     async stepHome() {
         console.log("\n[2] Mobile Plans / Landing");
         await this.recordPage("Mobile Plans / Landing", this.homeUrlPrefix);
