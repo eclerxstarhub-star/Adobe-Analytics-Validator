@@ -1,179 +1,105 @@
-class NetworkMonitor {
-
-    constructor() {
-        this.requests = [];
-        this.failedRequests = [];
-        this.runtimeErrors = [];
+class NetworkMonitor{
+    constructor(){
+        this.requests=[];
+        this.failedRequests=[];
+        this.runtimeErrors=[];
+        this.seenRequests=new Set;
     }
 
-    reset() {
-
-        this.requests = [];
-        this.failedRequests = [];
-        this.runtimeErrors = [];
-
+    reset(){
+        this.requests=[];
+        this.failedRequests=[];
+        this.runtimeErrors=[];
+        this.seenRequests=new Set;
     }
 
-    async collect(driver) {
-
-        let logs = [];
-
-        try {
-
-            logs =
-                await driver.manage()
-                    .logs()
-                    .get("performance");
-
-        }
-        catch (error) {
-
+    async collect(driver){
+        let logs=[];
+        try{
+            logs=await driver.manage().logs().get("performance");
+        }catch(_){
             return;
-
         }
 
-        for (const entry of logs) {
+        for(const entry of logs){
+            try{
+                const message=JSON.parse(entry.message).message;
+                if(message.method==="Network.requestWillBeSent"){
+                    const params=message.params||{},
+                        request=params.request||{};
 
-            try {
+                    if(request.url){
+                        const key=`${params.requestId||""}|${request.url}|${request.method||"GET"}`;
 
-                const message =
-                    JSON.parse(entry.message).message;
-
-                if (
-                    message.method ===
-                    "Network.requestWillBeSent"
-                ) {
-
-                    const params =
-                        message.params;
-
-                    if (
-                        params &&
-                        params.request &&
-                        params.request.url
-                    ) {
-
-                        this.requests.push({
-                            url: params.request.url,
-                            method:
-                                params.request.method || "GET",
-                            type:
-                                params.type || "",
-                            timestamp:
-                                params.timestamp || Date.now()
-                        });
-
+                        if(!this.seenRequests.has(key)){
+                            this.seenRequests.add(key);
+                            this.requests.push({
+                                requestId:params.requestId||"",
+                                url:request.url,
+                                method:request.method||"GET",
+                                type:params.type||"",
+                                postData:request.postData||"",
+                                timestamp:params.timestamp||Date.now()
+                            });
+                        }
                     }
-
                 }
 
-                if (
-                    message.method ===
-                    "Network.loadingFailed"
-                ) {
-
-                    const params =
-                        message.params || {};
-
+                if(message.method==="Network.loadingFailed"){
+                    const params=message.params||{};
                     this.failedRequests.push({
-                        requestId:
-                            params.requestId || "",
-                        errorText:
-                            params.errorText || "Unknown network error",
-                        type:
-                            params.type || ""
+                        requestId:params.requestId||"",
+                        errorText:params.errorText||"Unknown network error",
+                        type:params.type||""
                     });
-
                 }
 
-                if (
-                    message.method ===
-                    "Runtime.exceptionThrown"
-                ) {
-
-                    const details =
-                        message.params &&
-                        message.params.exceptionDetails;
-
-                    if (details) {
-
+                if(message.method==="Runtime.exceptionThrown"){
+                    const details=message.params&&message.params.exceptionDetails;
+                    if(details){
                         this.runtimeErrors.push({
-                            text:
-                                details.text ||
-                                "JavaScript exception",
-                            url:
-                                details.url || "",
-                            lineNumber:
-                                details.lineNumber || "",
-                            columnNumber:
-                                details.columnNumber || ""
+                            text:details.text||"JavaScript exception",
+                            url:details.url||"",
+                            lineNumber:details.lineNumber||"",
+                            columnNumber:details.columnNumber||""
                         });
-
                     }
-
                 }
-
-            }
-            catch (error) {
-
-                // Ignore malformed performance entries
-
-            }
-
+            }catch(_){}
         }
-
     }
 
-    async collectBrowserLogs(driver) {
-
-        let logs = [];
-
-        try {
-
-            logs =
-                await driver.manage()
-                    .logs()
-                    .get("browser");
-
-        }
-        catch (error) {
-
+    async collectBrowserLogs(driver){
+        let logs=[];
+        try{
+            logs=await driver.manage().logs().get("browser");
+        }catch(_){
             return;
-
         }
 
-        for (const log of logs) {
-
-            if (
-                log.level === "SEVERE"
-            ) {
-
+        for(const log of logs){
+            if(log.level==="SEVERE"){
                 this.runtimeErrors.push({
-                    text: log.message || "Browser console error",
-                    url: "",
-                    lineNumber: "",
-                    columnNumber: ""
+                    text:log.message||"Browser console error",
+                    url:"",
+                    lineNumber:"",
+                    columnNumber:""
                 });
-
             }
-
         }
-
     }
 
-    getRequests() {
+    getRequests(){
         return this.requests;
     }
 
-    getFailedRequests() {
+    getFailedRequests(){
         return this.failedRequests;
     }
 
-    getRuntimeErrors() {
+    getRuntimeErrors(){
         return this.runtimeErrors;
     }
-
 }
 
-module.exports =
-    new NetworkMonitor();
+module.exports=new NetworkMonitor();

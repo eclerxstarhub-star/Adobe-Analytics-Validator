@@ -1,733 +1,604 @@
-const express = require("express"),
-    path = require("path"),
-    fs = require("fs");
-const app = express();
-const PORT = Number(process.env.PORT) || 3000,
-    HOST = "0.0.0.0";
-let PreSalesJourneyValidator = null,
-    preSalesReportGenerator = null,
-    SiteCrawler = null,
-    reportGenerator = null;
-let currentJob = null,
-    activeValidator = null,
-    activeCrawler = null,
-    monitorTimer = null;
-let shutdownInProgress = false,
-    uncaughtHandling = false;
+const express=require("express"),path=require("path"),fs=require("fs");
+const app=express(),PORT=Number(process.env.PORT)||3000,HOST="0.0.0.0";
+let PreSalesJourneyValidator=null,preSalesReportGenerator=null,SiteCrawler=null,reportGenerator=null,currentJob=null,activeValidator=null,activeCrawler=null,monitorTimer=null,shutdownInProgress=false,uncaughtHandling=false;
 loadDotEnv();
-app.use(express.json());
-app.use(express.urlencoded({
-    extended: true
-}));
-app.use(express.static(path.join(__dirname, "..", "public")));
-app.use("/reports", express.static(path.join(__dirname, "..", "reports", "output")));
+app.use(express.json({limit:"2mb"}));
+app.use(express.urlencoded({extended:true}));
+app.use(express.static(path.join(__dirname,"..","public")));
+app.use("/reports",express.static(path.join(__dirname,"..","reports","output")));
 
-function loadRuntimeModules() {
-    if (!PreSalesJourneyValidator) PreSalesJourneyValidator = require("../scanner/preSalesJourneyValidator");
-    if (!preSalesReportGenerator) preSalesReportGenerator = require("../reports/preSalesReportGenerator");
-    if (!SiteCrawler) SiteCrawler = require("../scanner/siteCrawler");
-    if (!reportGenerator) reportGenerator = require("../reports/reportGenerator")
-}
-
-function loadDotEnv() {
-    const envPath = path.join(__dirname, "..", ".env");
-    if (!fs.existsSync(envPath)) return;
-    const lines = fs.readFileSync(envPath, "utf8").split(/\r?\n/);
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
-        const index = trimmed.indexOf("=");
-        if (index < 1) continue;
-        const key = trimmed.slice(0, index).trim();
-        let value = trimmed.slice(index + 1).trim();
-        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
-        if (process.env[key] === undefined) process.env[key] = value
-    }
+function loadDotEnv(){
+ const p=path.join(__dirname,"..",".env");
+ if(!fs.existsSync(p))return;
+ for(const line of fs.readFileSync(p,"utf8").split(/\r?\n/)){
+  const s=line.trim();
+  if(!s||s.startsWith("#"))continue;
+  const i=s.indexOf("=");
+  if(i<1)continue;
+  const k=s.slice(0,i).trim();
+  let v=s.slice(i+1).trim();
+  if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))v=v.slice(1,-1);
+  if(process.env[k]===undefined)process.env[k]=v;
+ }
 }
 
-function createJob(inputs) {
-    return {
-        id: `job-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
-        status: "QUEUED",
-        startedAt: null,
-        finishedAt: null,
-        inputs,
-        reportPath: null,
-        error: null,
-        logs: [],
-        pages: [],
-        currentPage: null,
-        summary: null
-    }
+function loadRuntimeModules(){
+ if(!PreSalesJourneyValidator)PreSalesJourneyValidator=require("../scanner/preSalesJourneyValidator");
+ if(!preSalesReportGenerator)preSalesReportGenerator=require("../reports/preSalesReportGenerator");
+ if(!SiteCrawler)SiteCrawler=require("../scanner/siteCrawler");
+ if(!reportGenerator)reportGenerator=require("../reports/reportGenerator");
 }
 
-function addJobLog(job, message, level = "INFO") {
-    if (!job) return;
-    job.logs.push({
-        timestamp: new Date().toISOString(),
-        level,
-        message: String(message)
-    });
-    if (job.logs.length > 500) job.logs.splice(0, job.logs.length - 500)
+function loadPreSalesJourneyConfig(){
+ const p=path.join(__dirname,"..","config","preSalesJourney.json");
+ if(!fs.existsSync(p))throw new Error(`Pre-Sales journey configuration not found: ${p}`);
+ try{return JSON.parse(fs.readFileSync(p,"utf8"));}catch(e){throw new Error(`Unable to read Pre-Sales journey configuration: ${e.message||e}`);}
 }
 
-function updateSummary(job, result) {
-    if (!job || !result) return;
-    const summary = result.summary || {},
-        pages = Array.isArray(result.pages) ? result.pages : [],
-        hits = Array.isArray(result.hits) ? result.hits : [],
-        errors = Array.isArray(result.errors) ? result.errors : [];
-    job.summary = {
-        journey: summary.status || "-",
-        adobe: Number(summary.adobeHits || hits.length || 0) > 0 ? "PASS" : "-",
-        cta: summary.cta || "-",
-        pagesVisited: Number(summary.pagesVisited || pages.length || 0),
-        adobeHits: Number(summary.adobeHits || hits.length || 0),
-        errors: errors.length
-    }
+function createJob(inputs){
+ return{
+  id:`job-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+  status:"QUEUED",
+  startedAt:null,
+  finishedAt:null,
+  inputs,
+  reportPath:null,
+  error:null,
+  logs:[],
+  pages:[],
+  currentPage:null,
+  summary:null
+ };
 }
 
-function syncValidatorState(job, validator) {
-    if (!job || !validator || !validator.result) return;
-    const result = validator.result,
-        pages = Array.isArray(result.pages) ? result.pages : [];
-    if (pages.length > job.pages.length) {
-        for (let i = job.pages.length; i < pages.length; i += 1) {
-            const page = pages[i];
-            job.pages.push({
-                step: page.step || `Page ${i+1}`,
-                url: page.url || "",
-                pageName: page.pageName || "",
-                status: page.status || "PASS",
-                adobeHitCount: page.adobeHitCount || 0,
-                eventsFound: page.eventsFound || []
-            });
-            addJobLog(job, `${page.step||`Page ${i+1}`} completed - ${page.url||""}`, page.status === "FAIL" ? "ERROR" : "INFO")
-        }
-    }
-    const currentUrl = validator.currentPageUrl || "";
-    if (currentUrl || validator.currentStep) job.currentPage = {
-        url: currentUrl,
-        step: validator.currentStep || (job.pages.length ? job.pages[job.pages.length - 1].step : "Starting journey"),
-        action: validator.currentAction || "",
-        cta: validator.currentCTA || "",
-        status: "RUNNING"
-    }
-    updateSummary(job, result)
+function addJobLog(job,message,level="INFO"){
+ if(!job)return;
+ const text=String(message),last=job.logs[job.logs.length-1];
+ if(last&&last.level===level&&last.message===text)return;
+ job.logs.push({timestamp:new Date().toISOString(),level,message:text});
+ if(job.logs.length>500)job.logs.splice(0,job.logs.length-500);
 }
 
-function syncAnalyticsState(job, crawler) {
-    if (!job || !crawler) return;
-    let result = {};
-    try {
-        if (typeof crawler.getResults === "function") result = crawler.getResults() || {}
-    } catch (error) {
-        addJobLog(job, `Unable to read crawler results: ${error.message||error}`, "WARN");
-        return
-    }
-    const pages = Array.isArray(result.pages) ? result.pages : [],
-        adobeHits = Array.isArray(result.adobeHits) ? result.adobeHits : [],
-        errors = Array.isArray(result.errors) ? result.errors : [],
-        ctaValidations = Array.isArray(result.ctaValidations) ? result.ctaValidations : [];
-    if (pages.length > job.pages.length) {
-        for (let i = job.pages.length; i < pages.length; i += 1) {
-            const page = pages[i];
-            job.pages.push({
-                step: page.step || page.name || `Page ${i+1}`,
-                url: page.url || page.pageUrl || "",
-                pageName: page.pageName || "",
-                status: page.status || "PASS",
-                adobeHitCount: Number(page.adobeHitCount || page.adobeHits && page.adobeHits.length || 0),
-                eventsFound: Array.isArray(page.eventsFound) ? page.eventsFound : Array.isArray(page.events) ? page.events : []
-            });
-            addJobLog(job, `${page.step||page.name||`Page ${i+1}`} completed - ${page.url||page.pageUrl||""}`, page.status === "FAIL" ? "ERROR" : "INFO")
-        }
-    }
-    const currentUrl = crawler.currentPageUrl || crawler.currentUrl || "",
-        currentStep = crawler.currentStep || "",
-        currentAction = crawler.currentAction || "",
-        currentCTA = crawler.currentCTA || "";
-    if (currentUrl || currentStep) job.currentPage = {
-        url: currentUrl,
-        step: currentStep || (pages.length ? pages[pages.length - 1].step || pages[pages.length - 1].name || `Page ${pages.length}` : "Starting sitewide validation"),
-        action: currentAction,
-        cta: currentCTA,
-        status: "RUNNING"
-    }
-    job.summary = {
-        journey: "-",
-        adobe: adobeHits.length > 0 ? "PASS" : "-",
-        cta: ctaValidations.length ? ctaValidations.every(item => item.status === "PASS") ? "PASS" : ctaValidations.some(item => item.status === "FAIL") ? "FAIL" : "-" : "-",
-        pagesVisited: pages.length,
-        adobeHits: adobeHits.length,
-        errors: errors.length
-    }
+function updateSummary(job,result){
+ if(!job||!result)return;
+ const s=result.summary||{},pages=Array.isArray(result.pages)?result.pages:[],hits=Array.isArray(result.hits)?result.hits:[],adobeHits=Array.isArray(result.adobeHits)?result.adobeHits:[],errors=Array.isArray(result.errors)?result.errors:[],ctas=Array.isArray(result.ctaValidations)?result.ctaValidations:[];
+ const totalAdobeHits=Number(s.adobeHits??adobeHits.length??hits.length??0);
+ let adobe=s.adobeStatus||s.adobe;
+ if(adobe!=="PASS"&&adobe!=="FAIL")adobe=totalAdobeHits>0?"PASS":pages.length?"FAIL":"-";
+ let cta="-";
+ if(ctas.length){
+  const passed=ctas.filter(x=>String(x.status||x.validation||"").toUpperCase()==="PASS").length;
+  const failed=ctas.filter(x=>String(x.status||x.validation||"").toUpperCase()==="FAIL").length;
+  if(passed===ctas.length)cta="PASS";
+  else if(passed>0&&failed>0)cta="PARTIALLY PASS";
+  else if(failed===ctas.length)cta="FAIL";
+  else cta="NOT VALIDATED";
+ }
+ let journey=s.status;
+ if(journey!=="PASS"&&journey!=="FAIL"){
+  journey=pages.some(x=>String(x.status||"").toUpperCase()==="FAIL")||ctas.some(x=>String(x.status||x.validation||"").toUpperCase()==="FAIL")?"FAIL":"PASS";
+ }
+ job.summary={journey,adobe,cta,pagesVisited:Number(s.pagesVisited??pages.length??0),adobeHits:totalAdobeHits,errors:errors.length};
 }
 
-function syncCompletedState(job, result) {
-    if (!job || !result) return;
-    const pages = Array.isArray(result.pages) ? result.pages : [];
-    job.pages = pages.map(page => ({
-        step: page.step || page.name || "",
-        url: page.url || page.pageUrl || "",
-        pageName: page.pageName || "",
-        status: page.status || "PASS",
-        adobeHitCount: page.adobeHitCount || 0,
-        eventsFound: page.eventsFound || page.events || []
-    }));
-    job.currentPage = null;
-    updateSummary(job, result)
+function syncAnalyticsState(job,crawler){
+ if(!job||!crawler)return;
+ let result={};
+ try{result=typeof crawler.getResults==="function"?crawler.getResults()||{}:{}}catch(e){addJobLog(job,`Unable to read crawler results: ${e.message||e}`,"WARN");return;}
+ const pages=Array.isArray(result.pages)?result.pages:[];
+ for(let i=job.pages.length;i<pages.length;i++){
+  const p=pages[i],step=p.step||p.name||`Page ${i+1}`,url=p.url||p.pageUrl||"";
+  if(job.pages.some(x=>x.step===step&&x.url===url))continue;
+  job.pages.push({step,url,pageName:p.pageName||"",status:p.status||"PASS",adobeHitCount:Number(p.adobeHitCount||(Array.isArray(p.adobeHits)?p.adobeHits.length:0)),eventsFound:p.eventsFound||p.events||[]});
+  addJobLog(job,`${step} completed - ${url}`,String(p.status||"").toUpperCase()==="FAIL"?"ERROR":"INFO");
+ }
+ const currentUrl=crawler.currentPageUrl||crawler.currentUrl||"",currentStep=crawler.currentStep||"",currentAction=crawler.currentAction||"",currentCTA=crawler.currentCTA||"";
+ if(currentUrl||currentStep)job.currentPage={url:currentUrl,step:currentStep||`Scanning page ${pages.length||1}`,action:currentAction,cta:currentCTA,status:"RUNNING"};
+ updateSummary(job,result);
 }
 
-function startValidatorMonitor(job, validator) {
-    stopValidatorMonitor();
-    monitorTimer = setInterval(() => {
-        try {
-            syncValidatorState(job, validator)
-        } catch (error) {
-            addJobLog(job, `Monitor error: ${error.message||error}`, "WARN")
-        }
-    }, 500)
+function syncValidatorState(job,validator){
+ if(!job||!validator||!validator.result)return;
+ const result=validator.result,pages=Array.isArray(result.pages)?result.pages:[];
+ for(let i=job.pages.length;i<pages.length;i++){
+  const p=pages[i],step=p.step||`Page ${i+1}`,url=p.url||"";
+  job.pages.push({step,url,pageName:p.pageName||"",status:p.status||"PASS",adobeHitCount:Number(p.adobeHitCount||(Array.isArray(p.adobeHits)?p.adobeHits.length:0)),eventsFound:p.eventsFound||p.events||[]});
+  addJobLog(job,`${step} completed - ${url}`,String(p.status||"").toUpperCase()==="FAIL"?"ERROR":"INFO");
+ }
+ const currentUrl=validator.currentPageUrl||"";
+ if(currentUrl||validator.currentStep)job.currentPage={url:currentUrl,step:validator.currentStep||`Scanning page ${pages.length||1}`,action:validator.currentAction||"",cta:validator.currentCTA||"",status:"RUNNING"};
+ updateSummary(job,result);
 }
 
-function startAnalyticsMonitor(job, crawler) {
-    stopValidatorMonitor();
-    monitorTimer = setInterval(() => {
-        try {
-            syncAnalyticsState(job, crawler)
-        } catch (error) {
-            addJobLog(job, `Analytics monitor error: ${error.message||error}`, "WARN")
-        }
-    }, 500)
+function syncCompletedState(job,result){
+ if(!job||!result)return;
+ const pages=Array.isArray(result.pages)?result.pages:[];
+ job.pages=pages.map((p,i)=>({step:p.step||p.name||`Page ${i+1}`,url:p.url||p.pageUrl||"",pageName:p.pageName||"",status:p.status||"PASS",adobeHitCount:Number(p.adobeHitCount||(Array.isArray(p.adobeHits)?p.adobeHits.length:0)),eventsFound:p.eventsFound||p.events||[]}));
+ job.currentPage=null;
+ updateSummary(job,result);
 }
 
-function stopValidatorMonitor() {
-    if (monitorTimer) {
-        clearInterval(monitorTimer);
-        monitorTimer = null
-    }
+function startAnalyticsMonitor(job,crawler){
+ stopMonitor();
+ monitorTimer=setInterval(()=>{try{syncAnalyticsState(job,crawler)}catch(e){addJobLog(job,`Analytics monitor error: ${e.message||e}`,"WARN")}},500);
 }
 
-function createEmptyResult() {
-    return {
-        startedAt: new Date().toISOString(),
-        finishedAt: null,
-        authentication: {},
-        summary: {},
-        pages: [],
-        actions: [],
-        products: [],
-        orders: [],
-        ecommerceEvents: [],
-        hits: [],
-        errors: [],
-        selections: []
-    }
+function startValidatorMonitor(job,validator){
+ stopMonitor();
+ monitorTimer=setInterval(()=>{try{syncValidatorState(job,validator)}catch(e){addJobLog(job,`Monitor error: ${e.message||e}`,"WARN")}},500);
 }
 
-function normalizePreSalesFailureResult(result, reason, termination) {
-    const safeResult = result || createEmptyResult();
-    safeResult.summary = safeResult.summary || {};
-    safeResult.pages = Array.isArray(safeResult.pages) ? safeResult.pages : [];
-    safeResult.actions = Array.isArray(safeResult.actions) ? safeResult.actions : [];
-    safeResult.products = Array.isArray(safeResult.products) ? safeResult.products : [];
-    safeResult.orders = Array.isArray(safeResult.orders) ? safeResult.orders : [];
-    safeResult.ecommerceEvents = Array.isArray(safeResult.ecommerceEvents) ? safeResult.ecommerceEvents : [];
-    safeResult.hits = Array.isArray(safeResult.hits) ? safeResult.hits : [];
-    safeResult.errors = Array.isArray(safeResult.errors) ? safeResult.errors : [];
-    safeResult.selections = Array.isArray(safeResult.selections) ? safeResult.selections : [];
-    safeResult.summary.status = "FAIL";
-    safeResult.summary.pagesVisited = safeResult.pages.length;
-    safeResult.summary.adobeHits = safeResult.hits.length;
-    safeResult.summary.ecommerceEvents = safeResult.ecommerceEvents.length;
-    safeResult.summary.productsCaptured = safeResult.products.length;
-    safeResult.summary.ordersCaptured = safeResult.orders.length;
-    safeResult.summary.passed = safeResult.pages.filter(page => page.status === "PASS").length;
-    safeResult.summary.failed = safeResult.pages.filter(page => page.status === "FAIL").length;
-    safeResult.interrupted = true;
-    safeResult.executionTerminationReason = reason || "Validation execution was interrupted.";
-    safeResult.executionTerminationType = termination || "INTERRUPTED";
-    if (reason) {
-        const alreadyLogged = safeResult.errors.some(error => String(error.error || "") === String(reason));
-        if (!alreadyLogged) safeResult.errors.push({
-            timestamp: new Date().toISOString(),
-            step: safeResult.pages.length + 1,
-            error: reason,
-            currentUrl: activeValidator && activeValidator.currentPageUrl ? activeValidator.currentPageUrl : ""
-        })
-    }
-    safeResult.finishedAt = new Date().toISOString();
-    return safeResult
-}
-async function generatePreSalesFailureReport(job, result, reason, termination = "PAGE_OR_EXECUTION_FAILURE") {
-    if (!job) return null;
-    loadRuntimeModules();
-    const reportResult = normalizePreSalesFailureResult(result, reason, termination),
-        output = path.join(__dirname, "..", "reports", "output");
-    fs.mkdirSync(output, {
-        recursive: true
-    });
-    const reportPath = await preSalesReportGenerator.generatePreSalesHTML(reportResult, output, {
-        uniqueFile: true
-    });
-    job.reportPath = `/reports/${path.basename(reportPath)}`;
-    job.finishedAt = reportResult.finishedAt;
-    job.error = reason || null;
-    job.status = "FAILED";
-    syncCompletedState(job, reportResult);
-    addJobLog(job, `Failure report generated: ${job.reportPath}`, "INFO");
-    return job.reportPath
-}
-async function generateAnalyticsFailureReport(job, crawler, reason, termination = "PAGE_OR_EXECUTION_FAILURE") {
-    if (!job) return null;
-    loadRuntimeModules();
-    let result = createEmptyResult();
-    try {
-        if (crawler && typeof crawler.getResults === "function") result = crawler.getResults() || createEmptyResult()
-    } catch (_) {}
-    result.pages = Array.isArray(result.pages) ? result.pages : [];
-    result.hits = Array.isArray(result.hits) ? result.hits : [];
-    result.adobeHits = Array.isArray(result.adobeHits) ? result.adobeHits : [];
-    result.errors = Array.isArray(result.errors) ? result.errors : [];
-    result.summary = result.summary || {};
-    const duplicate = result.errors.some(error => String(error.error || "") === String(reason));
-    if (!duplicate) result.errors.push({
-        timestamp: new Date().toISOString(),
-        error: reason,
-        currentUrl: crawler && (crawler.currentPageUrl || crawler.currentUrl || "")
-    });
-    result.summary.status = "FAIL";
-    result.summary.pagesVisited = result.pages.length;
-    result.summary.adobeHits = result.adobeHits.length || result.hits.length;
-    result.interrupted = true;
-    result.executionTerminationReason = reason;
-    result.executionTerminationType = termination;
-    result.finishedAt = new Date().toISOString();
-    const output = path.join(__dirname, "..", "reports", "output");
-    fs.mkdirSync(output, {
-        recursive: true
-    });
-    const reportPath = await reportGenerator.generateHTML(result, output);
-    job.reportPath = `/reports/${path.basename(reportPath)}`;
-    job.status = "FAILED";
-    job.finishedAt = result.finishedAt;
-    job.error = reason || null;
-    syncCompletedState(job, result);
-    addJobLog(job, `Analytics failure report generated: ${job.reportPath}`, "INFO");
-    return job.reportPath
-}
-async function runAnalyticsValidation(job) {
-    job.status = "RUNNING";
-    job.startedAt = new Date().toISOString();
-    addJobLog(job, "Sitewide Adobe Analytics validation started.");
-    addJobLog(job, `Website URL: ${job.inputs.url}`);
-    addJobLog(job, `Maximum pages: ${job.inputs.maxPages}`);
-    addJobLog(job, "Initializing Selenium site crawler.");
-    let crawler = null;
-    try {
-        loadRuntimeModules();
-        crawler = new SiteCrawler({
-            maxPages: job.inputs.maxPages,
-            maxAdobeWait: 60000,
-            postAdobeWait: 4000,
-            ctaClickWait: 15000,
-            ctaPollInterval: 250,
-            validations: job.inputs.validations || {}
-        });
-        activeCrawler = crawler;
-        startAnalyticsMonitor(job, crawler);
-        addJobLog(job, "Selenium site crawler initialized.");
-        addJobLog(job, "Starting website crawl and Adobe /b/ss validation.");
-        const result = await crawler.scan(job.inputs.url, job.inputs.maxPages),
-            finalResult = result || (typeof crawler.getResults === "function" ? crawler.getResults() : createEmptyResult()),
-            output = path.join(__dirname, "..", "reports", "output");
-        fs.mkdirSync(output, {
-            recursive: true
-        });
-        addJobLog(job, "Website crawl completed. Generating Analytics report.");
-        const reportPath = await reportGenerator.generateHTML(finalResult, output);
-        job.reportPath = `/reports/${path.basename(reportPath)}`;
-        job.finishedAt = finalResult && finalResult.finishedAt ? finalResult.finishedAt : new Date().toISOString();
-        const resultStatus = finalResult && finalResult.summary ? String(finalResult.summary.status || "").toUpperCase() : "";
-        job.status = resultStatus === "FAIL" ? "FAILED" : "COMPLETED";
-        job.error = job.status === "FAILED" && Array.isArray(finalResult.errors) && finalResult.errors.length ? finalResult.errors[finalResult.errors.length - 1].error : null;
-        syncCompletedState(job, finalResult);
-        addJobLog(job, `Sitewide validation finished with status ${job.status}.`);
-        addJobLog(job, `Report generated: ${job.reportPath}`)
-    } catch (error) {
-        const reason = error && error.message ? error.message : String(error);
-        addJobLog(job, `Sitewide validation stopped: ${reason}`, "ERROR");
-        try {
-            await generateAnalyticsFailureReport(job, crawler, reason, "PAGE_OR_EXECUTION_FAILURE")
-        } catch (reportError) {
-            job.status = "FAILED";
-            job.finishedAt = new Date().toISOString();
-            job.error = `${reason} | Report generation failed: ${reportError.message||reportError}`;
-            addJobLog(job, `Analytics report generation failed: ${reportError.message||reportError}`, "ERROR")
-        }
-    } finally {
-        stopValidatorMonitor();
-        activeCrawler = null;
-        if (crawler) try {
-            await crawler.close()
-        } catch (closeError) {
-            addJobLog(job, `Unable to close Analytics crawler: ${closeError.message||closeError}`, "WARN")
-        }
-    }
-}
-async function runPreSalesJourney(job) {
-    job.status = "RUNNING";
-    job.startedAt = new Date().toISOString();
-    addJobLog(job, "Pre-Sales journey started.");
-    let journeyError = null;
-    try {
-        loadRuntimeModules();
-        const paymentMode = job.inputs.paymentMode === "Pay Later" ? "payLater" : "payToday",
-            validator = new PreSalesJourneyValidator({
-                startUrl: process.env.PRESALES_START_URL,
-                maxAdobeWait: 60000,
-                networkQuietTime: 4000,
-                pollInterval: 250,
-                credentials: {
-                    hubId: job.inputs.hubId,
-                    hubPassword: process.env.HUB_PASSWORD
-                },
-                journeyConfig: require("../config/preSalesJourney.json"),
-                paymentOptionPrompt: async () => paymentMode === "payLater" ? "1" : "2",
-                payLaterPeriod: paymentMode === "payLater" ? job.inputs.paymentPeriod : null,
-                simType: job.inputs.simType
-            });
-        activeValidator = validator;
-        startValidatorMonitor(job, validator);
-        const result = await validator.run();
-        syncCompletedState(job, result);
-        const output = path.join(__dirname, "..", "reports", "output");
-        fs.mkdirSync(output, {
-            recursive: true
-        });
-        const reportPath = await preSalesReportGenerator.generatePreSalesHTML(result, output, {
-            uniqueFile: true
-        });
-        job.reportPath = `/reports/${path.basename(reportPath)}`;
-        job.status = result.summary && result.summary.status === "FAIL" ? "FAILED" : "COMPLETED";
-        job.finishedAt = result.finishedAt || new Date().toISOString();
-        job.error = job.status === "FAILED" && result.errors && result.errors.length ? result.errors[result.errors.length - 1].error : null;
-        addJobLog(job, `Validation finished with status ${job.status}.`);
-        addJobLog(job, `Report generated: ${job.reportPath}`)
-    } catch (error) {
-        journeyError = error;
-        const result = activeValidator && activeValidator.result ? activeValidator.result : createEmptyResult(),
-            reason = error && error.message ? error.message : String(error);
-        addJobLog(job, `Journey stopped: ${reason}`, "ERROR");
-        try {
-            await generatePreSalesFailureReport(job, result, reason, "PAGE_OR_EXECUTION_FAILURE")
-        } catch (reportError) {
-            job.status = "FAILED";
-            job.finishedAt = new Date().toISOString();
-            job.error = `${reason} | Report generation failed: ${reportError.message||reportError}`;
-            addJobLog(job, `Report generation failed: ${reportError.message||reportError}`, "ERROR")
-        }
-    } finally {
-        stopValidatorMonitor();
-        activeValidator = null;
-        if (journeyError) job.status = "FAILED"
-    }
+function stopMonitor(){
+ if(monitorTimer){clearInterval(monitorTimer);monitorTimer=null;}
 }
 
-function serializeJob(job) {
-    if (!job) return null;
-    const startedAt = job.startedAt ? new Date(job.startedAt) : null,
-        finishedAt = job.finishedAt ? new Date(job.finishedAt) : null;
-    let duration = null;
-    if (startedAt) {
-        const endTime = finishedAt || new Date(),
-            totalSeconds = Math.max(0, Math.floor((endTime.getTime() - startedAt.getTime()) / 1000));
-        duration = `${Math.floor(totalSeconds/60)}m ${totalSeconds%60}s`
-    }
-    let currentStep = "Waiting to start";
-    if (job.status === "QUEUED") currentStep = "Job queued";
-    if (job.status === "RUNNING") currentStep = job.currentPage && job.currentPage.step ? job.currentPage.step : job.inputs && job.inputs.mode === "analytics" ? "Executing sitewide Analytics validation" : "Executing Selenium journey";
-    if (job.status === "COMPLETED") currentStep = "Validation completed";
-    if (job.status === "FAILED") currentStep = "Validation failed";
-    return {
-        jobId: job.id,
-        status: job.status,
-        startedAt: job.startedAt,
-        completedAt: job.finishedAt,
-        finishedAt: job.finishedAt,
-        duration,
-        currentStep,
-        currentPage: job.currentPage,
-        message: job.error || null,
-        error: job.error || null,
-        reportPath: job.reportPath,
-        logs: job.logs || [],
-        summary: job.summary || null,
-        pages: job.pages || [],
-        inputs: job.inputs
-    }
+function createEmptyResult(){
+ return{startedAt:new Date().toISOString(),finishedAt:null,authentication:{},summary:{},pages:[],actions:[],products:[],orders:[],ecommerceEvents:[],hits:[],adobeHits:[],errors:[],selections:[]};
 }
 
-function findLatestReport() {
-    const output = path.join(__dirname, "..", "reports", "output");
-    if (!fs.existsSync(output)) return null;
-    const reports = fs.readdirSync(output).filter(name => name.toLowerCase().endsWith(".html")).map(name => ({
-        name,
-        mtime: fs.statSync(path.join(output, name)).mtimeMs
-    })).sort((a, b) => b.mtime - a.mtime);
-    return reports.length ? `/reports/${encodeURIComponent(reports[0].name)}` : null
+function normalizePreSalesFailureResult(result,reason,termination){
+ const r=result||createEmptyResult();
+ r.summary=r.summary||{};
+ r.pages=Array.isArray(r.pages)?r.pages:[];
+ r.actions=Array.isArray(r.actions)?r.actions:[];
+ r.products=Array.isArray(r.products)?r.products:[];
+ r.orders=Array.isArray(r.orders)?r.orders:[];
+ r.ecommerceEvents=Array.isArray(r.ecommerceEvents)?r.ecommerceEvents:[];
+ r.hits=Array.isArray(r.hits)?r.hits:[];
+ r.errors=Array.isArray(r.errors)?r.errors:[];
+ r.selections=Array.isArray(r.selections)?r.selections:[];
+ r.summary.status="FAIL";
+ r.summary.pagesVisited=r.pages.length;
+ r.summary.adobeHits=r.hits.length;
+ r.summary.ecommerceEvents=r.ecommerceEvents.length;
+ r.summary.productsCaptured=r.products.length;
+ r.summary.ordersCaptured=r.orders.length;
+ r.summary.passed=r.pages.filter(x=>x.status==="PASS").length;
+ r.summary.failed=r.pages.filter(x=>x.status==="FAIL").length;
+ r.interrupted=true;
+ r.executionTerminationReason=reason||"Validation execution was interrupted.";
+ r.executionTerminationType=termination||"INTERRUPTED";
+ if(reason&&!r.errors.some(x=>String(x.error||"")===String(reason)))r.errors.push({timestamp:new Date().toISOString(),step:r.pages.length+1,error:reason,currentUrl:activeValidator?.currentPageUrl||""});
+ r.finishedAt=new Date().toISOString();
+ return r;
 }
-app.get("/health", (req, res) => res.status(200).json({
-    success: true,
-    status: "UP",
-    service: "Adobe Analytics Validator",
-    port: PORT,
-    timestamp: new Date().toISOString()
-}));
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "..", "public", "index.html")));
-app.get("/api/reports/latest", (req, res) => res.json({
-    success: true,
-    reportPath: currentJob && currentJob.reportPath ? currentJob.reportPath : findLatestReport()
-}));
-app.post("/api/jobs", (req, res) => {
-    const {
-        mode,
-        url,
-        maxPages,
-        validations,
-        hubId,
-        paymentMode,
-        paymentPeriod,
-        simType
-    } = req.body;
-    if (!mode || !["analytics", "presales"].includes(mode)) return res.status(400).json({
-        success: false,
-        error: "Please select a valid validation mode."
-    });
-    if (currentJob && ["QUEUED", "RUNNING"].includes(currentJob.status)) return res.status(409).json({
-        success: false,
-        error: "Another validation is currently running. Please wait."
-    });
-    if (mode === "analytics") {
-        if (!url) return res.status(400).json({
-            success: false,
-            error: "Website URL is required."
-        });
-        try {
-            new URL(url)
-        } catch (_) {
-            return res.status(400).json({
-                success: false,
-                error: "Please provide a valid website URL."
-            })
-        }
-        const pages = Number(maxPages) || 25;
-        if (!Number.isInteger(pages) || pages < 1 || pages > 100) return res.status(400).json({
-            success: false,
-            error: "Maximum Pages must be between 1 and 100."
-        });
-        currentJob = createJob({
-            mode: "analytics",
-            url,
-            maxPages: pages,
-            validations: validations || {
-                pageLoad: true,
-                eVars: true,
-                props: true,
-                events: true,
-                products: true,
-                cta: true
-            }
-        });
-        addJobLog(currentJob, "Analytics validation job created and queued.");
-        runAnalyticsValidation(currentJob).catch(async error => {
-            const reason = error && error.message ? error.message : String(error);
-            addJobLog(currentJob, `Unexpected Analytics execution error: ${reason}`, "ERROR");
-            try {
-                await generateAnalyticsFailureReport(currentJob, activeCrawler, reason, "UNEXPECTED_SERVER_EXECUTION_ERROR")
-            } catch (reportError) {
-                currentJob.status = "FAILED";
-                currentJob.finishedAt = new Date().toISOString();
-                currentJob.error = `${reason} | Report generation failed: ${reportError.message||reportError}`
-            }
-        });
-        return res.status(202).json({
-            success: true,
-            message: "Adobe Analytics validation queued successfully.",
-            jobId: currentJob.id,
-            status: currentJob.status,
-            startedAt: currentJob.startedAt
-        })
-    }
-    if (!hubId || !paymentMode || !simType) return res.status(400).json({
-        success: false,
-        error: "Hub ID, payment mode, and SIM type are required."
-    });
-    currentJob = createJob({
-        mode: "presales",
-        hubId,
-        paymentMode,
-        paymentPeriod: paymentMode === "Pay Later" ? paymentPeriod || null : null,
-        simType
-    });
-    addJobLog(currentJob, "Pre-Sales journey job created and queued.");
-    runPreSalesJourney(currentJob).catch(async error => {
-        const reason = error && error.message ? error.message : String(error);
-        addJobLog(currentJob, `Unexpected Pre-Sales execution error: ${reason}`, "ERROR");
-        try {
-            await generatePreSalesFailureReport(currentJob, activeValidator ? activeValidator.result : null, reason, "UNEXPECTED_SERVER_EXECUTION_ERROR")
-        } catch (reportError) {
-            currentJob.status = "FAILED";
-            currentJob.finishedAt = new Date().toISOString();
-            currentJob.error = `${reason} | Report generation failed: ${reportError.message||reportError}`
-        }
-    });
-    return res.status(202).json({
-        success: true,
-        message: "Selenium journey queued successfully.",
-        jobId: currentJob.id,
-        status: currentJob.status,
-        startedAt: currentJob.startedAt
-    })
+
+async function generatePreSalesHTMLReport(result,outputDirectory){
+ if(!preSalesReportGenerator)loadRuntimeModules();
+ const g=preSalesReportGenerator;
+ if(typeof g.generatePreSalesHTML==="function")return g.generatePreSalesHTML(result,outputDirectory,{uniqueFile:true});
+ if(typeof g.generateHTML==="function")return g.generateHTML(result,outputDirectory,{uniqueFile:true});
+ if(typeof g.generate==="function")return g.generate(result,outputDirectory,{uniqueFile:true});
+ if(typeof g.generatePreSalesReport==="function")return g.generatePreSalesReport(result,outputDirectory,{uniqueFile:true});
+ if(typeof g.generateReport==="function")return g.generateReport(result,outputDirectory,{uniqueFile:true});
+ if(typeof g.createReport==="function")return g.createReport(result,outputDirectory,{uniqueFile:true});
+ if(typeof g==="function")return g(result,outputDirectory,{uniqueFile:true});
+ const keys=Object.keys(g||{});
+ throw new Error(`Pre-Sales report generator export not supported. Available exports: ${keys.join(", ")||"none"}`);
+}
+
+async function generatePreSalesFailureReport(job,result,reason,termination="PAGE_OR_EXECUTION_FAILURE"){
+ loadRuntimeModules();
+ const r=normalizePreSalesFailureResult(result,reason,termination),out=path.join(__dirname,"..","reports","output");
+ fs.mkdirSync(out,{recursive:true});
+ const file=await generatePreSalesHTMLReport(r,out);
+ job.reportPath=`/reports/${path.basename(file)}`;
+ job.finishedAt=r.finishedAt;
+ job.error=reason||null;
+ job.status="FAILED";
+ syncCompletedState(job,r);
+ addJobLog(job,`Failure report generated: ${job.reportPath}`);
+ return job.reportPath;
+}
+
+async function generateAnalyticsFailureReport(job,crawler,reason,termination="PAGE_OR_EXECUTION_FAILURE"){
+ loadRuntimeModules();
+ let r=createEmptyResult();
+ try{if(crawler&&typeof crawler.getResults==="function")r=crawler.getResults()||createEmptyResult()}catch(_){}
+ r.pages=Array.isArray(r.pages)?r.pages:[];
+ r.hits=Array.isArray(r.hits)?r.hits:[];
+ r.adobeHits=Array.isArray(r.adobeHits)?r.adobeHits:[];
+ r.errors=Array.isArray(r.errors)?r.errors:[];
+ r.summary=r.summary||{};
+ if(!r.errors.some(x=>String(x.error||"")===String(reason)))r.errors.push({timestamp:new Date().toISOString(),error:reason,currentUrl:crawler?.currentPageUrl||crawler?.currentUrl||""});
+ r.summary.status="FAIL";
+ r.summary.pagesVisited=r.pages.length;
+ r.summary.adobeHits=r.adobeHits.length||r.hits.length;
+ r.interrupted=true;
+ r.executionTerminationReason=reason;
+ r.executionTerminationType=termination;
+ r.finishedAt=new Date().toISOString();
+ const out=path.join(__dirname,"..","reports","output");
+ fs.mkdirSync(out,{recursive:true});
+ const file=await reportGenerator.generateHTML(r,out);
+ job.reportPath=`/reports/${path.basename(file)}`;
+ job.status="FAILED";
+ job.finishedAt=r.finishedAt;
+ job.error=reason||null;
+ syncCompletedState(job,r);
+ addJobLog(job,`Analytics failure report generated: ${job.reportPath}`);
+ return job.reportPath;
+}
+
+async function runAnalyticsValidation(job){
+ loadRuntimeModules();
+ job.status="RUNNING";
+ job.startedAt=new Date().toISOString();
+ const singlePage=String(job.inputs.validationType||"").toLowerCase().includes("single");
+ addJobLog(job,singlePage?"Single Page Adobe Analytics validation started.":"Sitewide Adobe Analytics validation started.");
+ addJobLog(job,`Website URL: ${job.inputs.url}`);
+ if(!singlePage)addJobLog(job,"Maximum pages: 25");
+ addJobLog(job,"Initializing Selenium site crawler.");
+ const crawler=new SiteCrawler({maxPages:25,maxAdobeWait:30000,logger:(level,message)=>addJobLog(job,message,level),onProgress:()=>syncAnalyticsState(job,crawler)});
+ activeCrawler=crawler;
+ startAnalyticsMonitor(job,crawler);
+ addJobLog(job,"Selenium site crawler initialized.");
+ addJobLog(job,singlePage?"Starting single-page Adobe /b/ss and CTA validation.":"Starting website crawl and Adobe /b/ss validation.");
+ try{
+  const result=singlePage?await crawler.scanSelectedUrls([job.inputs.url]):await crawler.scan(job.inputs.url,25);
+  syncAnalyticsState(job,crawler);
+  addJobLog(job,singlePage?"Single-page validation completed. Generating Analytics report.":"Website crawl completed. Generating Analytics report.");
+  const out=path.join(__dirname,"..","reports","output");
+  fs.mkdirSync(out,{recursive:true});
+  const file=await reportGenerator.generateHTML(result,out);
+  job.reportPath=`/reports/${path.basename(file)}`;
+  job.finishedAt=new Date().toISOString();
+  syncCompletedState(job,result);
+  job.status="COMPLETED";
+  job.error=null;
+  addJobLog(job,`Report generated: ${job.reportPath}`);
+  addJobLog(job,`Analytics validation finished with status ${job.status}.`);
+  return result;
+ }catch(e){
+  const reason=e?.message||String(e);
+  addJobLog(job,`Analytics validation failed: ${reason}`,"ERROR");
+  try{await generateAnalyticsFailureReport(job,crawler,reason,"EXECUTION_FAILURE")}catch(re){
+   job.status="FAILED";job.error=reason;job.finishedAt=new Date().toISOString();
+   addJobLog(job,`Unable to generate Analytics failure report: ${re.message||re}`,"ERROR");
+  }
+  return null;
+ }finally{
+  stopMonitor();
+  if(activeCrawler===crawler)activeCrawler=null;
+  job.currentPage=null;
+ }
+}
+
+function validatePreSalesUrl(value){
+ const url=String(value||"").trim();
+ if(!url)return{error:"Pre-Sales Website URL is required."};
+ let parsed;
+ try{parsed=new URL(url)}catch(_){return{error:"Pre-Sales Website URL is invalid."}};
+ if(!["http:","https:"].includes(parsed.protocol))return{error:"Pre-Sales Website URL must start with http:// or https://"};
+ const hostname=parsed.hostname.toLowerCase();
+ const allowedHosts=["starhubltd-tst1.outsystemsenterprise.com","starhubltd-tst.outsystemsenterprise.com","consumer-hfd.starhub.com","consumer.starhub.com","starhub.com"];
+ if(!allowedHosts.includes(hostname))return{error:"Unsupported Pre-Sales Website URL. Please use a configured StarHub environment."};
+ return{url:`${parsed.protocol}//${parsed.host}/`};
+}
+
+function buildRuntimeJourneyConfig(journeyConfig,selectedBaseUrl){
+ const base=new URL(selectedBaseUrl),baseOrigin=base.origin;
+ function replaceUrls(value){
+  if(Array.isArray(value))return value.map(replaceUrls);
+  if(value&&typeof value==="object"){
+   const output={};
+   for(const [key,item] of Object.entries(value))output[key]=replaceUrls(item);
+   return output;
+  }
+  if(typeof value!=="string")return value;
+  const text=value.trim();
+  if(!/^https?:\/\//i.test(text))return value;
+  try{
+   const parsed=new URL(text);
+   return new URL(`${parsed.pathname}${parsed.search}${parsed.hash}`,baseOrigin).toString();
+  }catch(_){return value}
+ }
+ return replaceUrls(journeyConfig);
+}
+
+function validatePreSalesInputs(inputs){
+ const paymentMode=String(inputs.paymentMode||"").trim(),simType=String(inputs.simType||"").trim();
+ if(!String(inputs.hubId||"").trim())return{error:"Hub ID is required."};
+ if(paymentMode!=="Pay Later"&&paymentMode!=="Pay Today")return{error:"Payment Mode must be Pay Later or Pay Today."};
+ if(!["eSIM","Physical SIM"].includes(simType))return{error:"SIM Type must be eSIM or Physical SIM."};
+ if(paymentMode==="Pay Later"&&!["12","24","36"].includes(String(inputs.payLaterPeriod||"").trim()))return{error:"Pay Later Period must be 12, 24, or 36 months."};
+ return null;
+}
+
+async function runPreSalesJourney(job){
+ loadRuntimeModules();
+ job.status="RUNNING";
+ job.startedAt=new Date().toISOString();
+ addJobLog(job,"Pre-Sales Journey validation started.");
+ addJobLog(job,"Loading Pre-Sales journey configuration.");
+ const journeyConfig=loadPreSalesJourneyConfig(),selectedUrl=String(job.inputs.url||"").trim(),urlValidation=validatePreSalesUrl(selectedUrl);
+ if(urlValidation.error)throw new Error(urlValidation.error);
+ const startUrl=urlValidation.url,runtimeJourneyConfig=buildRuntimeJourneyConfig(journeyConfig,startUrl);
+ if(!runtimeJourneyConfig.startUrl)throw new Error("Pre-Sales journey configuration does not contain a startUrl.");
+ addJobLog(job,`Selected Pre-Sales Website URL: ${startUrl}`);
+ addJobLog(job,`Journey start URL: ${runtimeJourneyConfig.startUrl}`);
+ addJobLog(job,`Home URL prefix: ${runtimeJourneyConfig.homeUrlPrefix||"-"}`);
+ addJobLog(job,`Device listing prefix: ${runtimeJourneyConfig.deviceListingPrefix||"-"}`);
+ addJobLog(job,`Product PDP prefix: ${runtimeJourneyConfig.productPdpPrefix||"-"}`);
+ addJobLog(job,`Intent prefix: ${runtimeJourneyConfig.intentPrefix||"-"}`);
+ addJobLog(job,"Initializing Selenium Pre-Sales Journey Validator.");
+ const options=job.inputs.options||{};
+ const credentials=options.credentials&&typeof options.credentials==="object"?options.credentials:{hubId:job.inputs.hubId||"",hubPassword:job.inputs.hubPassword||""};
+ const paymentMode=String(job.inputs.paymentMode||"").trim();
+ const paymentPrompt=paymentMode==="Pay Later"?"1":"2";
+ const simType=String(job.inputs.simType||"").trim();
+ const payLaterPeriod=paymentMode==="Pay Later"?String(job.inputs.payLaterPeriod||""):"";
+ addJobLog(job,`Payment Mode: ${paymentMode||"-"}`);
+ addJobLog(job,`Payment Prompt: ${paymentPrompt}`);
+ addJobLog(job,`Payment Period: ${payLaterPeriod||"-"}`);
+ addJobLog(job,`SIM Type: ${simType||"-"}`);
+ const validator=new PreSalesJourneyValidator({
+  startUrl:runtimeJourneyConfig.startUrl,
+  credentials,
+  journeyConfig:runtimeJourneyConfig,
+  maxAdobeWait:60000,
+  networkQuietTime:4000,
+  pollInterval:250,
+  logger:(level,message)=>addJobLog(job,message,level),
+  onProgress:()=>syncValidatorState(job,validator),
+  paymentOptionPrompt:async()=>paymentPrompt,
+  payLaterPeriod:payLaterPeriod||null,
+  simType
+ });
+ activeValidator=validator;
+ startValidatorMonitor(job,validator);
+ addJobLog(job,"Selenium Pre-Sales Journey Validator initialized.");
+ try{
+  addJobLog(job,"Starting complete 12-step Pre-Sales journey.");
+  const result=await validator.run();
+  syncValidatorState(job,validator);
+  const out=path.join(__dirname,"..","reports","output");
+  fs.mkdirSync(out,{recursive:true});
+  const file=await generatePreSalesHTMLReport(result,out);
+  job.reportPath=`/reports/${path.basename(file)}`;
+  job.finishedAt=new Date().toISOString();
+  syncCompletedState(job,result);
+  job.status=result?.summary?.status==="FAIL"?"FAILED":"COMPLETED";
+  job.error=job.status==="FAILED"?(result?.errors?.length?result.errors[result.errors.length-1]?.error||"Pre-Sales journey failed.":"Pre-Sales journey failed."):null;
+  addJobLog(job,`Pre-Sales report generated: ${job.reportPath}`);
+  addJobLog(job,`Pre-Sales validation finished with status ${job.status}.`);
+  return result;
+ }catch(e){
+  const reason=e?.message||String(e);
+  addJobLog(job,`Pre-Sales validation failed: ${reason}`,"ERROR");
+  try{
+   await generatePreSalesFailureReport(job,validator?.result||createEmptyResult(),reason,"EXECUTION_FAILURE");
+  }catch(re){
+   job.status="FAILED";job.error=reason;job.finishedAt=new Date().toISOString();
+   addJobLog(job,`Unable to generate Pre-Sales failure report: ${re.message||re}`,"ERROR");
+  }
+  return null;
+ }finally{
+  stopMonitor();
+  if(activeValidator===validator)activeValidator=null;
+  job.currentPage=null;
+ }
+}
+
+function serializeJob(job){
+ if(!job)return null;
+ const finishedAt=job.finishedAt||null;
+ let duration=null;
+ if(job.startedAt){
+  const start=new Date(job.startedAt).getTime(),end=finishedAt?new Date(finishedAt).getTime():Date.now();
+  if(!Number.isNaN(start)&&!Number.isNaN(end)&&end>=start){
+   const seconds=Math.floor((end-start)/1000);
+   duration=`${Math.floor(seconds/60)}m ${seconds%60}s`;
+  }
+ }
+ return{id:job.id,jobId:job.id,status:job.status,startedAt:job.startedAt,finishedAt,completedAt:finishedAt,duration,reportPath:job.reportPath,error:job.error,message:job.error||null,currentStep:job.currentPage?.step||null,currentPage:job.currentPage,inputs:job.inputs,logs:job.logs,pages:job.pages,summary:job.summary};
+}
+
+function findLatestReport(){
+ const out=path.join(__dirname,"..","reports","output");
+ if(!fs.existsSync(out))return null;
+ const files=fs.readdirSync(out).filter(x=>x.toLowerCase().endsWith(".html")).map(file=>{try{return{file,mtimeMs:fs.statSync(path.join(out,file)).mtimeMs}}catch(_){return null}}).filter(Boolean).sort((a,b)=>b.mtimeMs-a.mtimeMs);
+ return files.length?files[0].file:null;
+}
+
+function validateJobRequest(body){
+ const url=String(body?.url||"").trim();
+ if(!url)return{error:"Website URL is required."};
+ if(!/^https?:\/\//i.test(url))return{error:"Website URL must start with http:// or https://"};
+ return{url};
+}
+
+function getPreSalesInputs(body){
+ const options=body?.options&&typeof body.options==="object"?body.options:{};
+ return{
+  url:String(body?.url||body?.websiteUrl||options?.url||options?.websiteUrl||"").trim(),
+  hubId:body?.hubId??body?.hubID??options?.hubId??options?.hubID??"",
+  hubPassword:body?.hubPassword??options?.hubPassword??"",
+  paymentMode:body?.paymentMode??body?.paymentMethod??options?.paymentMode??options?.paymentMethod??"",
+  payLaterPeriod:body?.payLaterPeriod??body?.paymentPeriod??body?.period??options?.payLaterPeriod??options?.paymentPeriod??options?.period??"",
+  simType:body?.simType??options?.simType??"",
+  startUrl:body?.startUrl??options?.startUrl??"",
+  credentials:body?.credentials??options?.credentials??null,
+  journeyConfig:body?.journeyConfig??options?.journeyConfig??null,
+  options
+ };
+}
+
+async function createPreSalesJobFromBody(body,res){
+ if(currentJob&&(currentJob.status==="QUEUED"||currentJob.status==="RUNNING"))return res.status(409).json({error:"A validation job is already running.",jobId:currentJob.id,id:currentJob.id,job:serializeJob(currentJob)});
+ const ps=getPreSalesInputs(body),urlValidation=validatePreSalesUrl(ps.url);
+ if(urlValidation.error)return res.status(400).json({error:urlValidation.error});
+ const inputValidation=validatePreSalesInputs(ps);
+ if(inputValidation)return res.status(400).json({error:inputValidation.error});
+ const credentials=ps.credentials&&typeof ps.credentials==="object"?ps.credentials:{};
+ currentJob=createJob({
+  url:urlValidation.url,
+  validationType:"preSalesJourney",
+  mode:"presales",
+  hubId:String(ps.hubId).trim(),
+  hubPassword:String(ps.hubPassword||""),
+  paymentMode:String(ps.paymentMode).trim(),
+  payLaterPeriod:String(ps.payLaterPeriod||"").trim(),
+  simType:String(ps.simType).trim(),
+  options:{
+   ...ps.options,
+   startUrl:urlValidation.url,
+   credentials:{...credentials,hubId:credentials.hubId||ps.hubId||"",hubPassword:credentials.hubPassword||ps.hubPassword||""},
+   journeyConfig:null,
+   hubId:ps.hubId,
+   hubPassword:ps.hubPassword,
+   paymentMode:ps.paymentMode,
+   payLaterPeriod:ps.payLaterPeriod,
+   simType:ps.simType
+  }
+ });
+ addJobLog(currentJob,"Pre-Sales Journey validation job created and queued.");
+ setImmediate(async()=>{
+  try{await runPreSalesJourney(currentJob)}catch(e){
+   if(currentJob){
+    currentJob.status="FAILED";
+    currentJob.error=e?.message||String(e);
+    currentJob.finishedAt=new Date().toISOString();
+    addJobLog(currentJob,`Unhandled Pre-Sales error: ${currentJob.error}`,"ERROR");
+   }
+  }
+ });
+ return res.status(202).json({message:"Pre-Sales validation job created.",jobId:currentJob.id,id:currentJob.id,status:currentJob.status,startedAt:currentJob.startedAt,job:serializeJob(currentJob)});
+}
+
+app.get("/api/health",(req,res)=>res.json({status:"OK",timestamp:new Date().toISOString(),activeJob:currentJob?.id||null,nodeVersion:process.version,environment:process.env.NODE_ENV||"development"}));
+app.get("/api/status",(req,res)=>res.json({status:"OK",job:serializeJob(currentJob),active:!!currentJob&&(currentJob.status==="QUEUED"||currentJob.status==="RUNNING")}));
+app.get("/api/jobs/:id",(req,res)=>{if(!currentJob||currentJob.id!==req.params.id)return res.status(404).json({error:"Job not found"});res.json(serializeJob(currentJob))});
+app.get("/api/job/:id",(req,res)=>{if(!currentJob||currentJob.id!==req.params.id)return res.status(404).json({error:"Job not found"});res.json(serializeJob(currentJob))});
+
+app.get("/api/reports/latest",(req,res)=>{
+ const report=findLatestReport();
+ if(!report)return res.status(404).json({error:"No report found"});
+ res.json({report,path:`/reports/${encodeURIComponent(report)}`});
 });
-app.get("/api/jobs/:jobId", (req, res) => {
-    if (!currentJob || currentJob.id !== req.params.jobId) return res.status(404).json({
-        success: false,
-        error: "Job not found."
-    });
-    if (currentJob.inputs && currentJob.inputs.mode === "analytics") syncAnalyticsState(currentJob, activeCrawler);
-    else syncValidatorState(currentJob, activeValidator);
-    return res.json(serializeJob(currentJob))
+app.get("/api/report/latest",(req,res)=>{
+ const report=findLatestReport();
+ if(!report)return res.status(404).json({error:"No report found"});
+ res.json({report,path:`/reports/${encodeURIComponent(report)}`});
 });
-app.post("/api/journeys", (req, res) => {
-    const {
-        hubId,
-        paymentMode,
-        paymentPeriod,
-        simType
-    } = req.body;
-    if (!hubId || !paymentMode || !simType) return res.status(400).json({
-        success: false,
-        message: "Hub ID, payment mode, and SIM type are required."
-    });
-    if (currentJob && ["QUEUED", "RUNNING"].includes(currentJob.status)) return res.status(409).json({
-        success: false,
-        message: "Another journey is currently running. Please wait."
-    });
-    currentJob = createJob({
-        mode: "presales",
-        hubId,
-        paymentMode,
-        paymentPeriod: paymentMode === "Pay Later" ? paymentPeriod || null : null,
-        simType
-    });
-    addJobLog(currentJob, "Journey created through /api/journeys.");
-    void runPreSalesJourney(currentJob);
-    return res.json({
-        success: true,
-        message: "Selenium journey started successfully.",
-        jobId: currentJob.id,
-        status: currentJob.status
-    })
+app.get("/api/reports/:filename",(req,res)=>{
+ const filename=path.basename(req.params.filename),file=path.join(__dirname,"..","reports","output",filename);
+ if(!fs.existsSync(file))return res.status(404).json({error:"Report not found"});
+ res.sendFile(file);
 });
-app.get("/api/journeys/current", (req, res) => res.json({
-    success: true,
-    job: currentJob ? serializeJob(currentJob) : null
-}));
-const server = app.listen(PORT, HOST, () => {
-    console.log("==================================================");
-    console.log("Adobe Analytics Validator server started");
-    console.log(`Environment: ${process.env.NODE_ENV||"development"}`);
-    console.log(`PORT: ${PORT}`);
-    console.log(`HOST: ${HOST}`);
-    console.log(`Health check: http://127.0.0.1:${PORT}/health`);
-    console.log("==================================================")
+app.get("/api/report/:filename",(req,res)=>{
+ const filename=path.basename(req.params.filename),file=path.join(__dirname,"..","reports","output",filename);
+ if(!fs.existsSync(file))return res.status(404).json({error:"Report not found"});
+ res.sendFile(file);
 });
-server.on("error", error => console.error("Web server error:", error));
-async function gracefulShutdown(signal) {
-    if (shutdownInProgress) return;
-    shutdownInProgress = true;
-    console.log(`\n${signal} received. Preparing safe shutdown...`);
-    try {
-        stopValidatorMonitor();
-        if (currentJob && ["QUEUED", "RUNNING"].includes(currentJob.status) && activeCrawler) {
-            const reason = `Execution interrupted because the server received ${signal}.`;
-            addJobLog(currentJob, reason, "ERROR");
-            try {
-                await generateAnalyticsFailureReport(currentJob, activeCrawler, reason, "SERVER_STOP");
-                console.log(`Partial Analytics report generated: ${currentJob.reportPath}`)
-            } catch (reportError) {
-                console.error("Unable to generate Analytics interruption report:", reportError)
-            }
-            try {
-                await activeCrawler.close()
-            } catch (closeError) {
-                console.error("Unable to close Analytics crawler:", closeError)
-            }
-        }
-        if (currentJob && ["QUEUED", "RUNNING"].includes(currentJob.status) && activeValidator) {
-            syncValidatorState(currentJob, activeValidator);
-            const reason = `Execution interrupted because the server received ${signal}.`;
-            addJobLog(currentJob, reason, "ERROR");
-            try {
-                const reportPath = await generatePreSalesFailureReport(currentJob, activeValidator.result, reason, "SERVER_STOP");
-                console.log(`Partial validation report generated: ${reportPath}`)
-            } catch (reportError) {
-                console.error("Unable to generate interruption report:", reportError)
-            }
-            try {
-                await activeValidator.close()
-            } catch (closeError) {
-                console.error("Unable to close Selenium driver:", closeError)
-            }
-        }
-    } catch (error) {
-        console.error("Graceful shutdown report handling failed:", error)
-    } finally {
-        activeValidator = null;
-        activeCrawler = null;
-        try {
-            await new Promise(resolve => server.close(resolve))
-        } catch (_) {}
-        process.exit(0)
-    }
+
+async function createAnalyticsJob(req,res){
+ if(currentJob&&(currentJob.status==="QUEUED"||currentJob.status==="RUNNING"))return res.status(409).json({error:"A validation job is already running.",jobId:currentJob.id,id:currentJob.id,job:serializeJob(currentJob)});
+ const body=req.body||{},validationType=String(body.validationType||body.validationTypeName||body.type||"singlePage"),isPreSales=String(body.mode||"").toLowerCase()==="presales"||validationType.toLowerCase().includes("presales");
+ if(isPreSales)return createPreSalesJobFromBody(body,res);
+ const checked=validateJobRequest(body);
+ if(checked.error)return res.status(400).json({error:checked.error});
+ const validations=body.validations&&typeof body.validations==="object"?body.validations:{};
+ currentJob=createJob({
+  url:checked.url,
+  validationType,
+  mode:"analytics",
+  pageLoadAnalytics:validations.pageLoad!==false&&body.pageLoadAnalytics!==false,
+  eVars:validations.eVars!==false&&body.eVars!==false,
+  props:validations.props!==false&&body.props!==false,
+  events:validations.events!==false&&body.events!==false,
+  products:validations.products!==false&&body.products!==false,
+  ctaValidation:validations.cta!==false&&body.ctaValidation!==false,
+  options:body.options||{}
+ });
+ addJobLog(currentJob,"Analytics validation job created and queued.");
+ setImmediate(async()=>{
+  try{await runAnalyticsValidation(currentJob)}catch(e){
+   currentJob.status="FAILED";
+   currentJob.error=e?.message||String(e);
+   currentJob.finishedAt=new Date().toISOString();
+   addJobLog(currentJob,`Unhandled validation error: ${currentJob.error}`,"ERROR");
+  }
+ });
+ return res.status(202).json({message:"Validation job created.",jobId:currentJob.id,id:currentJob.id,status:currentJob.status,startedAt:currentJob.startedAt,job:serializeJob(currentJob)});
 }
-process.on("SIGINT", () => {
-    void gracefulShutdown("SIGINT")
+
+app.post("/api/jobs",createAnalyticsJob);
+app.post("/api/validate",createAnalyticsJob);
+app.post("/api/pre-sales/jobs",(req,res)=>createPreSalesJobFromBody(req.body||{},res));
+app.post("/api/pre-sales/validate",(req,res)=>createPreSalesJobFromBody(req.body||{},res));
+app.post("/api/journeys",(req,res)=>createPreSalesJobFromBody(req.body||{},res));
+
+app.get("/api/journeys/current",(req,res)=>{
+ if(!currentJob)return res.json({success:true,job:null});
+ res.json({success:true,job:serializeJob(currentJob)});
 });
-process.on("SIGTERM", () => {
-    void gracefulShutdown("SIGTERM")
+
+app.get("/reports",(req,res)=>{
+ const report=findLatestReport();
+ if(!report)return res.status(404).send("No report found.");
+ res.redirect(`/reports/${encodeURIComponent(report)}`);
 });
-process.on("uncaughtException", async error => {
-    console.error("Uncaught exception:", error);
-    if (uncaughtHandling) return;
-    uncaughtHandling = true;
-    if (currentJob && activeCrawler) try {
-        await generateAnalyticsFailureReport(currentJob, activeCrawler, `Uncaught server exception: ${error.message||error}`, "UNCAUGHT_EXCEPTION")
-    } catch (reportError) {
-        console.error("Analytics exception report generation failed:", reportError)
-    }
-    if (currentJob && activeValidator && !activeCrawler) try {
-        await generatePreSalesFailureReport(currentJob, activeValidator.result, `Uncaught server exception: ${error.message||error}`, "UNCAUGHT_EXCEPTION")
-    } catch (reportError) {
-        console.error("Pre-Sales exception report generation failed:", reportError)
-    }
-    await gracefulShutdown("UNCAUGHT_EXCEPTION")
+
+app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"..","public","index.html")));
+
+async function gracefulShutdown(signal){
+ if(shutdownInProgress)return;
+ shutdownInProgress=true;
+ console.log(`\nReceived ${signal}. Shutting down gracefully...`);
+ stopMonitor();
+ try{
+  if(activeCrawler){
+   try{
+    if(typeof activeCrawler.close==="function")await activeCrawler.close();
+    else if(typeof activeCrawler.quitDriver==="function")await activeCrawler.quitDriver();
+   }catch(e){console.error("Crawler shutdown error:",e.message||e)}
+  }
+  if(activeValidator){
+   try{
+    if(typeof activeValidator.close==="function")await activeValidator.close();
+    else if(typeof activeValidator.quitDriver==="function")await activeValidator.quitDriver();
+   }catch(e){console.error("Validator shutdown error:",e.message||e)}
+  }
+ }finally{
+  activeCrawler=null;
+  activeValidator=null;
+  process.exit(0);
+ }
+}
+
+process.on("SIGINT",()=>gracefulShutdown("SIGINT"));
+process.on("SIGTERM",()=>gracefulShutdown("SIGTERM"));
+process.on("uncaughtException",async e=>{
+ console.error("Uncaught exception:",e);
+ if(uncaughtHandling)return;
+ uncaughtHandling=true;
+ if(currentJob&&(currentJob.status==="RUNNING"||currentJob.status==="QUEUED")){
+  currentJob.status="FAILED";
+  currentJob.error=e?.message||String(e);
+  currentJob.finishedAt=new Date().toISOString();
+  addJobLog(currentJob,`Uncaught exception: ${currentJob.error}`,"ERROR");
+ }
+ await gracefulShutdown("uncaughtException");
 });
-process.on("unhandledRejection", async reason => {
-    const error = reason instanceof Error ? reason : new Error(String(reason));
-    console.error("Unhandled rejection:", error);
-    if (uncaughtHandling) return;
-    uncaughtHandling = true;
-    if (currentJob && activeCrawler) try {
-        await generateAnalyticsFailureReport(currentJob, activeCrawler, `Unhandled server rejection: ${error.message||error}`, "UNHANDLED_REJECTION")
-    } catch (reportError) {
-        console.error("Analytics rejection report generation failed:", reportError)
-    }
-    if (currentJob && activeValidator && !activeCrawler) try {
-        await generatePreSalesFailureReport(currentJob, activeValidator.result, `Unhandled server rejection: ${error.message||error}`, "UNHANDLED_REJECTION")
-    } catch (reportError) {
-        console.error("Pre-Sales rejection report generation failed:", reportError)
-    }
-    await gracefulShutdown("UNHANDLED_REJECTION")
+process.on("unhandledRejection",e=>{
+ console.error("Unhandled rejection:",e);
+ if(currentJob&&(currentJob.status==="RUNNING"||currentJob.status==="QUEUED")){
+  currentJob.error=e?.message||String(e);
+  addJobLog(currentJob,`Unhandled rejection: ${currentJob.error}`,"ERROR");
+ }
+});
+
+app.listen(PORT,HOST,()=>{
+ console.log("==============================================");
+ console.log("ADOBE WEBSITE ANALYTICS VALIDATOR");
+ console.log("==============================================");
+ console.log(`Server:       http://localhost:${PORT}`);
+ console.log(`Reports:      http://localhost:${PORT}/reports`);
+ console.log(`Health:       http://localhost:${PORT}/api/health`);
+ console.log(`Status:       http://localhost:${PORT}/api/status`);
+ console.log(`Environment:  ${process.env.NODE_ENV||"development"}`);
+ console.log(`Node:         ${process.version}`);
+ console.log(`Working Dir:  ${process.cwd()}`);
+ console.log("==============================================");
 });
