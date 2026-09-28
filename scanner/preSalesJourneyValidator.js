@@ -55,6 +55,7 @@ class PreSalesJourneyValidator {
         this.reviewDetailPrefix = this.reviewDetailPrefix;
         this.threeDsPrefix = this.threeDsPrefix;
         this.successPrefix = this.successPrefix;
+        this.timeout = options.timeout || 90000;
         this.maxAdobeWait = options.maxAdobeWait || 60000;
         this.networkQuietTime = options.networkQuietTime || 4000;
         this.pollInterval = options.pollInterval || 250;
@@ -66,6 +67,7 @@ class PreSalesJourneyValidator {
         this.paymentOptionPrompt = options.paymentOptionPrompt || null;
         this.payLaterPeriod = options.payLaterPeriod || null;
         this.simType = options.simType || null;
+        this.lastRecordedPageName = "";
         this.result = {
             startedAt: new Date().toISOString(),
             finishedAt: null,
@@ -336,6 +338,19 @@ class PreSalesJourneyValidator {
             return "";
         }
     }
+    async waitForPageName(previousPageName = "", timeout = 5000) {
+        const start = Date.now();
+        let last = "";
+        while (Date.now() - start < timeout) {
+            const value = String(await this.getPageName()).trim();
+            if (value) {
+                last = value;
+                if (!previousPageName || value !== previousPageName) return value;
+            }
+            await this.sleep(250);
+        }
+        return last;
+    }
     async recordPage(name, expectedPrefix = "") {
         this.currentStep = name;
         this.currentAction = "";
@@ -506,27 +521,111 @@ class PreSalesJourneyValidator {
     }
     async login() {
         console.log("\n[1] Login");
-        await this.navigateAndRecord("Login Page", this.startUrl || this.startUrl, this.startUrl || this.startUrl);
-        const email = await this.waitForElement(By.css("input[type='email'],input[name*='email'],input[id*='email'],input[name*='user'],input[id*='user'],input[type='text']"));
-        const password = await this.waitForElement(By.css("input[type='password']"));
+        await this.drainPerformanceLogs();
+        await this.driver.get(this.startUrl);
+        await this.waitForPageReady(30000);
+        let currentUrl = await this.driver.getCurrentUrl();
+        if (/invalid-permissions/i.test(currentUrl)) {
+            this.result.authentication = {
+                status: "FAILED",
+                account: "Test Account",
+                reason: "Environment redirected to invalid-permissions",
+                url: currentUrl
+            };
+            throw new Error(`Login page redirected to invalid-permissions: ${currentUrl}`);
+        }
+        const findVisibleInput = async (selectors, timeout = 30000) => {
+            const start = Date.now();
+            while (Date.now() - start < timeout) {
+                for (const selector of selectors) {
+                    try {
+                        const elements = await this.driver.findElements(By.css(selector));
+                        for (const el of elements) {
+                            if (await el.isDisplayed() && await el.isEnabled()) return el;
+                        }
+                    } catch (_) {}
+                }
+                try {
+                    const frames = await this.driver.findElements(By.css("iframe"));
+                    for (const frame of frames) {
+                        try {
+                            await this.driver.switchTo().frame(frame);
+                            for (const selector of selectors) {
+                                const elements = await this.driver.findElements(By.css(selector));
+                                for (const el of elements) {
+                                    if (await el.isDisplayed() && await el.isEnabled()) return el;
+                                }
+                            }
+                            await this.driver.switchTo().defaultContent();
+                        } catch (_) {
+                            try {
+                                await this.driver.switchTo().defaultContent();
+                            } catch (_) {}
+                        }
+                    }
+                } catch (_) {}
+                await this.sleep(500);
+            }
+            return null;
+        };
+        const email = await findVisibleInput(["input[type='email']", "input[name*='email' i]", "input[id*='email' i]", "input[name*='user' i]", "input[id*='user' i]", "input[autocomplete='username']", "input[type='text']"]);
+        const password = await findVisibleInput(["input[type='password']", "input[autocomplete='current-password']"]);
+        try {
+            await this.driver.switchTo().defaultContent();
+        } catch (_) {}
+        currentUrl = await this.driver.getCurrentUrl();
+        if (/invalid-permissions/i.test(currentUrl)) {
+            this.result.authentication = {
+                status: "FAILED",
+                account: "Test Account",
+                reason: "Environment redirected to invalid-permissions",
+                url: currentUrl
+            };
+            throw new Error(`Login fields unavailable because environment redirected to invalid-permissions: ${currentUrl}`);
+        }
+        if (!email || !password) {
+            this.result.authentication = {
+                status: "FAILED",
+                account: "Test Account",
+                reason: "Login fields not found",
+                url: currentUrl
+            };
+            throw new Error(`Login fields not found. Username: ${email ? "FOUND" : "NOT FOUND"}, Password: ${password ? "FOUND" : "NOT FOUND"}, URL: ${currentUrl}`);
+        }
         await email.clear();
         await email.sendKeys(this.credentials.hubId || "");
         await password.clear();
         await password.sendKeys(this.credentials.hubPassword || "Slice1234");
         const buttons = await this.visibleElements(By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']"));
-        if (buttons.length) await this.clickAndRecord("Login CTA", () => this.clickElement(buttons[0], "Login"), this.homeUrlPrefix, "Login");
-        else {
+        if (buttons.length) {
+            await this.drainPerformanceLogs();
+            await this.clickElement(buttons[0], "Login");
+            const hits = await this.captureAdobeWindow("Login CTA");
+            this.recordAction("CTA", "Login", "", hits, await this.driver.getCurrentUrl());
+        } else {
             await this.drainPerformanceLogs();
             await password.sendKeys(Key.ENTER);
             const hits = await this.captureAdobeWindow("Login CTA");
             this.recordAction("CTA", "Login", "", hits, await this.driver.getCurrentUrl());
         }
-        await this.waitForUrlPrefix(this.homeUrlPrefix);
+        await this.sleep(1500);
+        currentUrl = await this.driver.getCurrentUrl();
+        if (/invalid-permissions/i.test(currentUrl)) {
+            this.result.authentication = {
+                status: "FAILED",
+                account: "Test Account",
+                reason: "Environment redirected to invalid-permissions after login",
+                url: currentUrl
+            };
+            throw new Error(`Login redirected to invalid-permissions: ${currentUrl}`);
+        }
+        await this.waitForUrlPrefix(this.homeUrlPrefix, 90000);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         console.log("    Login successful. Landed on: " + this.currentPageUrl);
         this.result.authentication = {
             status: "SUCCESS",
-            account: "Test Account"
+            account: "Test Account",
+            url: this.currentPageUrl
         };
     }
     async stepHome() {
@@ -1658,9 +1757,8 @@ class PreSalesJourneyValidator {
         console.log("    Next page loaded after Confirm and Pay.");
         const successAlreadyReached = (await this.driver.getCurrentUrl()).toLowerCase().includes("checkout-success");
         if (!successAlreadyReached) {
-            const intermediateCta = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'done') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm')]")).then(elements => elements.find(async element => {
-                return await element.isDisplayed().catch(() => false);
-            }));
+            const intermediateCandidates = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'done') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm') ]"));
+            const intermediateCta = intermediateCandidates.length ? intermediateCandidates[0] : null;
             if (intermediateCta) {
                 await this.drainPerformanceLogs();
                 await this.clickElement(intermediateCta, "Done/Confirm");
