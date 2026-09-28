@@ -569,31 +569,55 @@ class PreSalesJourneyValidator {
         return hits;
     }
 
-    async login() {
-        console.log("\n[1] Login");
-        await this.navigateAndRecord("Login Page", this.config.startUrl || this.startUrl, this.config.startUrl || this.startUrl);
-
-        const email = await this.waitForElement(By.css("input[type='email'],input[name*='email'],input[id*='email'],input[name*='user'],input[id*='user'],input[type='text']"));
-        const password = await this.waitForElement(By.css("input[type='password']"));
-        await email.clear();
-        await email.sendKeys(this.credentials.hubId || "");
-        await password.clear();
-        await password.sendKeys(this.credentials.hubPassword || "Slice1234");
-
-        const buttons = await this.visibleElements(By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']"));
-        if (buttons.length) await this.clickAndRecord("Login CTA", () => this.clickElement(buttons[0], "Login"), this.config.homeUrlPrefix, "Login");
-        else {
-            await this.drainPerformanceLogs();
-            await password.sendKeys(Key.ENTER);
-            const hits = await this.captureAdobeWindow("Login CTA");
-            this.recordAction("CTA", "Login", "", hits, await this.driver.getCurrentUrl());
-        }
-
-        await this.waitForUrlPrefix(this.config.homeUrlPrefix);
-        this.currentPageUrl = await this.driver.getCurrentUrl();
-        console.log("    Login successful. Landed on: " + this.currentPageUrl);
-        this.result.authentication = { status: "SUCCESS", account: "Test Account" };
+   async login() {
+    console.log("\n[1] Login"), await this.navigateAndRecord("Login Page", this.config.startUrl || this.startUrl, this.config.startUrl || this.startUrl), await this.waitForPageReady(3e4);
+    const t = Date.now();
+    let e = null,
+        i = null;
+    for (; Date.now() - t < 3e4;) {
+        try {
+            const t = await this.driver.findElements(By.css("input"));
+            for (const a of t) {
+                if (!await a.isDisplayed().catch(() => !1)) continue;
+                const t = ((await a.getAttribute("type").catch(() => "")) + " " + (await a.getAttribute("name").catch(() => "")) + " " + (await a.getAttribute("id").catch(() => "")) + " " + (await a.getAttribute("placeholder").catch(() => ""))).toLowerCase();
+                if (!e && (/email|user|hub.?id|username|login/.test(t) || "text" === (await a.getAttribute("type").catch(() => "")).toLowerCase())) e = a;
+                if (!i && "password" === (await a.getAttribute("type").catch(() => "")).toLowerCase()) i = a
+            }
+            if (e && i) break
+        } catch (t) {}
+        await this.sleep(500)
     }
+    if (!e || !i) {
+        let t = "";
+        try {
+            t = await this.driver.executeScript("return document.body?document.body.innerText:''")
+        } catch (t) {}
+        let a = "";
+        try {
+            a = await this.driver.getPageSource()
+        } catch (t) {}
+        this.result.selections.push({
+            type: "Login Diagnostics",
+            url: await this.driver.getCurrentUrl(),
+            title: await this.driver.getTitle().catch(() => ""),
+            bodyText: String(t || "").slice(0, 3000),
+            pageSource: String(a || "").slice(0, 10000)
+        });
+        throw new Error(`Login fields not found on Render. Username field: ${e?"FOUND":"NOT FOUND"}, Password field: ${i?"FOUND":"NOT FOUND"}, URL: ${await this.driver.getCurrentUrl()}`)
+    }
+    await e.clear(), await e.sendKeys(this.credentials.hubId || ""), await i.clear(), await i.sendKeys(this.credentials.hubPassword || "Slice1234");
+    const a = await this.visibleElements(By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']")).then(t => t[0]);
+    if (a) await this.clickAndRecord("Login CTA", () => this.clickElement(a, "Login"), this.config.homeUrlPrefix, "Login");
+    else {
+        await this.drainPerformanceLogs(), await i.sendKeys(Key.ENTER);
+        const t = await this.captureAdobeWindow("Login CTA");
+        this.recordAction("CTA", "Login", "", t, await this.driver.getCurrentUrl())
+    }
+    await this.waitForUrlPrefix(this.config.homeUrlPrefix, 9e4), this.currentPageUrl = await this.driver.getCurrentUrl(), console.log("    Login successful. Landed on: " + this.currentPageUrl), this.result.authentication = {
+        status: "SUCCESS",
+        account: "Test Account"
+    }
+}
 
     async stepHome() {
         console.log("\n[2] Mobile Plans / Landing");
