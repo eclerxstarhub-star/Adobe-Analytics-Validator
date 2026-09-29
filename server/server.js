@@ -43,7 +43,12 @@ function validatePreSalesUrl(value){
     try{parsed=new URL(url)}catch(_){return{error:"Pre-Sales Website URL is invalid."}};
     if(!["http:","https:"].includes(parsed.protocol))return{error:"Pre-Sales Website URL must start with http:// or https://"};
     const hostname=parsed.hostname.toLowerCase();
-    const allowedHosts=["starhubltd-tst1.outsystemsenterprise.com","starhubltd-tst.outsystemsenterprise.com","consumer-hfd.starhub.com"];
+    const allowedHosts=[
+ "starhubltd-tst1.outsystemsenterprise.com",
+ "starhubltd-tst.outsystemsenterprise.com",
+ "consumer-hfd.starhub.com",
+ "consumer.starhub.com"
+];
     if(!allowedHosts.includes(hostname))return{error:"Unsupported Pre-Sales Website URL. Please use TST1, TST, or HFD StarHub environment."};
     return{url:`${parsed.protocol}//${parsed.host}`};
 }
