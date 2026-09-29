@@ -371,6 +371,10 @@ Waiting for job logs...
 </div>
 
 <div class="job-label" style="margin-top:10px">
+Current pageName
+</div>
+<div id="currentPageNameValue" class="job-value">-</div>
+<div class="job-label" style="margin-top:10px">
 Current Action
 </div>
 
@@ -874,6 +878,10 @@ document.getElementById(
 
 document.getElementById(
 "currentPageValue"
+).textContent=
+"-";
+document.getElementById(
+"currentPageNameValue"
 ).textContent=
 "-";
 
@@ -1553,6 +1561,11 @@ document.getElementById(
 "currentPageValue"
 ).textContent=
 `${currentPage.step||"Running"} - ${currentPage.url}`;
+document.getElementById(
+"currentPageNameValue"
+).textContent=
+currentPage.pageName||
+"-";
 
 }else{
 
@@ -1561,6 +1574,11 @@ document.getElementById(
 ).textContent=
 currentPage.step||
 "Running";
+document.getElementById(
+"currentPageNameValue"
+).textContent=
+currentPage.pageName||
+"-";
 
 }
 
@@ -1584,6 +1602,10 @@ currentCta||
 
 document.getElementById(
 "currentPageValue"
+).textContent=
+"-";
+document.getElementById(
+"currentPageNameValue"
 ).textContent=
 "-";
 
@@ -1699,10 +1721,13 @@ currentPage.url
 )}
 </td>
 
-<td>-</td>
+<td>${escapeHtml(
+currentPage.pageName||
+"-"
+)}</td>
 
 <td class="page-status running">
-Running...
+RUNNING
 </td>
 
 </tr>
