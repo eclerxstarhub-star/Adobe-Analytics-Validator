@@ -355,7 +355,7 @@ async function runAnalyticsJob(job){
         addJobLog(job,"Validation type: "+(inputs.validationType||"singlePage"));
         addJobLog(job,"Selected URL: "+inputs.url);
         addJobLog(job,"CTA validation: "+(inputs.validations?.cta===false?"Disabled":"Enabled"));
-        crawler=new SiteCrawler({maxPages:inputs.maxPages||25,maxAdobeWait:30000,postAdobeWait:2000,ctaClickWait:8000,ctaPollInterval:250,logger:(level,message)=>{addJobLog(job,message,level);syncAnalyticsState(job,crawler)},onProgress:()=>syncAnalyticsState(job,crawler)});
+        crawler=new SiteCrawler({maxPages:inputs.maxPages||25,maxAdobeWait:30000,postAdobeWait:2000,ctaClickWait:8000,ctaPollInterval:250,validations:inputs.validations||{},logger:(level,message)=>{addJobLog(job,message,level);syncAnalyticsState(job,crawler)},onProgress:()=>syncAnalyticsState(job,crawler)});
         activeValidator=crawler;
         stateSync=setInterval(()=>syncAnalyticsState(job,crawler),500);
         job.currentStep=inputs.validationType==="sitewide"?"Starting website crawl":"Starting single-page validation";
