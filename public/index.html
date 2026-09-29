@@ -1564,9 +1564,10 @@ currentPage;
 document.getElementById(
 "currentPageValue"
 ).textContent=
-currentPage.url
-?`${currentPage.step||"Running"} - ${currentPage.url}`
-:(currentPage.step||"Running");
+currentPage.url||
+currentPage.pageUrl||
+currentPage.finalUrl||
+"Running";
 
 }
 
