@@ -12,7 +12,7 @@ this.currentCTA="";
 this.maxPages=options.maxPages||25;
 this.maxAdobeWait=options.maxAdobeWait||30000;
 this.postAdobeWait=options.postAdobeWait||2000;
-this.ctaClickWait=options.ctaClickWait||8000;
+this.ctaClickWait=options.ctaClickWait||15000;
 this.ctaPollInterval=options.ctaPollInterval||250;
 this.validations={pageLoad:true,eVars:true,props:true,events:true,products:true,cta:true,...(options.validations||{})};
 this.results={pages:[],adobePages:[],adobeHits:[],marketingPixels:[],errors:[],eVars:{},props:{},events:{},reportSuites:{},ctaValidations:[],totalNetworkRequests:0};
@@ -705,7 +705,19 @@ element
 this.currentAction="Waiting for CTA Adobe /b/ss";
 this.progress();
 
-const hits=await this.collectCTAAdobeHits();
+let hits=[];
+const captureStart=Date.now(),captureLimit=this.ctaClickWait;
+while(Date.now()-captureStart<captureLimit){
+const current=await this.collectNetworkData();
+for(const hit of current){
+const key=hit.requestId||hit._key||[hit.url,hit.pageName,JSON.stringify(hit.eVars),JSON.stringify(hit.events),hit.timestamp].join("|");
+if(!hits.some(existing=>(existing.requestId&&existing.requestId===hit.requestId)||existing._key===key))hits.push(hit);
+}
+const event6Found=hits.some(hit=>this.hitHasEvent6(hit));
+const v24Found=hits.some(hit=>this.getHitEVar24(hit)!=="");
+if(event6Found&&v24Found)break;
+await new Promise(r=>setTimeout(r,this.ctaPollInterval));
+}
 
 /*
  * 7. Identify CTA Adobe hits.
