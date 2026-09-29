@@ -21,15 +21,17 @@ function hitType(h){return ctaHit(h)?"CTA / Link Tracking":"Page Load"}
 function ctaRecords(p){return Array.isArray(p?.ctaValidations)?p.ctaValidations:[]}
 function ctaDetails(item){
 const ah=Array.isArray(item?.ctaAdobeHits)?item.ctaAdobeHits:[];
-const event6=item?.event6===true||String(item?.event6).toLowerCase()==="yes"||ah.some(h=>events(h).some(x=>String(x).toLowerCase()==="event6"));
-const ev24=ah.map(h=>evars(h).v24||evars(h).V24||"").find(Boolean)||item?.eVar24||item?.v24||"";
-const link=ah.map(h=>h?.link||h?.pev2||"").find(x=>x)||"";
-const pe=ah.map(h=>h?.pe||"").find(x=>x)||"";
-const pev2=ah.map(h=>h?.pev2||"").find(x=>x)||"";
-const passed=event6&&String(ev24).trim()!=="";
+const matching=ah.find(h=>ctaHit(h)&&events(h).some(x=>String(x).toLowerCase()==="event6")&&String(evars(h).v24||evars(h).V24||"").trim()!=="");
+const display=matching||ah.find(ctaHit)||ah[0]||null;
+const event6=!!(matching||item?.event6===true&&display&&ctaHit(display)&&events(display).some(x=>String(x).toLowerCase()==="event6"));
+const ev24=matching?evars(matching).v24||evars(matching).V24||"":display?(evars(display).v24||evars(display).V24||""):"";
+const link=display?.link||"";
+const pe=display?.pe||"";
+const pev2=display?.pev2||"";
+const passed=!!matching;
 const raw=String(item?.status||item?.validation||"").toUpperCase();
 const status=raw==="NOT_VALIDATED"?"NOT VALIDATED":passed?"PASS":"FAIL";
-return{event6,ev24,link,pe,pev2,status,hits:ah}
+return{event6,ev24,link,pe,pev2,status,hits:ah,ctaCaptured:ah.some(ctaHit)}
 }
 function buildPageData(p,r){
 const hs=pageLoadHits(p,r),evs=eventList(hs),ek=keysFor(hs,"eVar"),pk=keysFor(hs,"prop");
