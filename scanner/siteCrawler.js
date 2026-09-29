@@ -363,7 +363,7 @@ if(!this.driver)return[];
 const selectors=["a","button","input[type='button']","input[type='submit']","[role='button']"];
 const elements=await this.driver.findElements(By.css(selectors.join(",")));
 const ctas=[];
-const seenMeaningful=new Set;
+const occurrenceMap=new Map;
 
 let detected=0,skipped=0;
 
@@ -398,9 +398,8 @@ this.normalizeText(label),
 this.getHrefPath(href)
 ].join("|");
 
-if(seenMeaningful.has(fingerprint))continue;
-
-seenMeaningful.add(fingerprint);
+const occurrence=(occurrenceMap.get(fingerprint)||0)+1;
+occurrenceMap.set(fingerprint,occurrence);
 
 ctas.push({
 index,
@@ -413,14 +412,15 @@ id,
 href,
 className,
 label,
-fingerprint
+fingerprint,
+occurrence
 });
 
 }catch(e){}
 }
 
 this.log("INFO",`CTA elements detected: ${detected}`);
-this.log("INFO",`Unique CTA candidates found: ${ctas.length}`);
+this.log("INFO",`CTA candidates selected for validation: ${ctas.length}`);
 
 if(skipped)this.log("INFO",`Structural/hidden CTA elements skipped: ${skipped}`);
 
@@ -501,6 +501,7 @@ const targetTitle=this.normalizeText(cta.title);
 const targetName=this.normalizeText(cta.name);
 const targetHref=this.normalizeHref(cta.href);
 const targetPath=this.getHrefPath(cta.href);
+const targetOccurrence=Number(cta.occurrence||1);
 
 for(let attempt=0;attempt<20;attempt++){
 
@@ -508,7 +509,7 @@ try{
 
 const elements=await this.driver.findElements(By.css(selectors));
 
-const candidateIndex=await this.driver.executeScript((selector,targetLabel,targetText,targetAria,targetTitle,targetName,targetHref,targetPath)=>{
+const candidateIndex=await this.driver.executeScript((selector,targetLabel,targetText,targetAria,targetTitle,targetName,targetHref,targetPath,targetOccurrence)=>{
 const normalize=value=>String(value||"").replace(/\s+/g," ").trim().toLowerCase();
 
 const normalizeHref=value=>{
@@ -534,8 +535,7 @@ return String(value).split("?")[0].split("#")[0].replace(/\/$/,"").toLowerCase()
 };
 
 const elements=[...document.querySelectorAll(selector)];
-let bestIndex=-1;
-let bestScore=0;
+const matches=[];
 
 for(let i=0;i<elements.length;i++){
 const el=elements[i];
@@ -567,17 +567,17 @@ if(targetPath&&path===targetPath)score+=30;
 if(targetLabel&&label===targetLabel&&targetPath&&path===targetPath)score+=100;
 if(targetText&&text===targetText&&targetPath&&path===targetPath)score+=80;
 
-if(score>bestScore){
-bestScore=score;
-bestIndex=i;
-}
+if(score>=50)matches.push({index:i,score});
 
 }catch(e){}
 }
 
-return bestScore>=50?bestIndex:-1;
+matches.sort((a,b)=>b.score-a.score);
+return matches.length>=targetOccurrence
+?matches[targetOccurrence-1].index
+:(matches[0]?.index??-1);
 
-},selectors,targetLabel,targetText,targetAria,targetTitle,targetName,targetHref,targetPath);
+},selectors,targetLabel,targetText,targetAria,targetTitle,targetName,targetHref,targetPath,targetOccurrence);
 
 if(typeof candidateIndex==="number"&&candidateIndex>=0&&elements[candidateIndex]){
 
@@ -632,7 +632,7 @@ async validateCTAs(pageUrl,pageName,ctas){
 const list=Array.isArray(ctas)?ctas:[];
 const validations=[];
 
-this.log("INFO",`Validating ${list.length} unique CTA(s) on page.`);
+this.log("INFO",`Validating ${list.length} CTA(s) on page.`);
 
 for(let i=0;i<list.length;i++){
 
