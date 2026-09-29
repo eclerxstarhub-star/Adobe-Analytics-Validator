@@ -26,9 +26,9 @@ progress(){try{this.onProgress()}catch(e){}}
 
 async createDriver(){
 const options=new chrome.Options;
-options.setPageLoadStrategy("eager");
+options.setPageLoadStrategy("none");
 options.addArguments("--headless=new","--disable-gpu","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080");
-options.setLoggingPrefs({performance:"ALL",browser:"ALL"});
+options.setLoggingPrefs({performance:"ALL"});
 options.setPerfLoggingPrefs({enableNetwork:true,enablePage:true});
 this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();
 try{
@@ -242,12 +242,17 @@ async waitForAdobeHit(timeout=this.maxAdobeWait){
 return await this.captureAdobeHits(timeout)
 }
 
-async waitForPageComplete(timeout=15000){
+async waitForPageComplete(timeout=15000,hitSink=null){
 if(!this.driver)return false;
 
 const start=Date.now();
 
 while(Date.now()-start<timeout){
+try{
+const captured=await this.collectNetworkData();
+if(Array.isArray(hitSink)&&captured.length)hitSink.push(...captured);
+}catch(e){}
+
 try{
 const readyState=await this.driver.executeScript("return document.readyState");
 
@@ -260,12 +265,17 @@ await new Promise(r=>setTimeout(r,250));
 return false;
 }
 
-async waitForDynamicContent(timeout=10000){
+async waitForDynamicContent(timeout=10000,hitSink=null){
 if(!this.driver)return;
 
 const start=Date.now();
 
 while(Date.now()-start<timeout){
+try{
+const captured=await this.collectNetworkData();
+if(Array.isArray(hitSink)&&captured.length)hitSink.push(...captured);
+}catch(e){}
+
 try{
 const count=await this.driver.executeScript(()=>{
 return document.querySelectorAll("a,button,input[type='button'],input[type='submit'],[role='button']").length
@@ -937,8 +947,7 @@ await this.driver.getCurrentUrl()
 );
 this.currentPageName="";
 
-/* Capture early network activity before long page waits. */
-const earlyPageHits=await this.collectNetworkData();
+let earlyPageHits=await this.collectNetworkData();
 
 await this.driver.wait(
 until.elementLocated(By.css("body")),
@@ -948,7 +957,8 @@ until.elementLocated(By.css("body")),
 this.currentAction="Waiting for page";
 this.progress();
 
-const pageComplete=await this.waitForPageComplete(30000);
+const pageLoadDrain=[];
+const pageComplete=await this.waitForPageComplete(15000,pageLoadDrain);
 
 if(!pageComplete){
 this.log(
@@ -957,7 +967,7 @@ this.log(
 );
 }
 
-await this.waitForDynamicContent(10000);
+await this.waitForDynamicContent(10000,pageLoadDrain);
 
 await new Promise(r=>setTimeout(r,this.postAdobeWait));
 
@@ -981,7 +991,7 @@ this.currentAction="Capturing Adobe Analytics";
 this.progress();
 
 const pageHits=await this.captureAdobeHits(this.maxAdobeWait);
-const allCapturedPageHits=[...earlyPageHits,...pageHits];
+const allCapturedPageHits=[...earlyPageHits,...pageLoadDrain,...pageHits];
 const uniquePageHits=[];
 const pageSeen=new Set;
 
