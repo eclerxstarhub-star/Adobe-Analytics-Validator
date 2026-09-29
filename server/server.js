@@ -341,8 +341,20 @@ function syncAnalyticsState(job,crawler){
     job.currentAction=crawler.currentAction||job.currentAction||null;
     job.currentCta=crawler.currentCTA||job.currentCta||null;
     job.currentPage=crawler.currentPageUrl||job.currentPage||null;
-    if(Array.isArray(crawler.results?.pages))job.pages=crawler.results.pages;
-    if(Array.isArray(job.pages)&&job.pages.length){const last=job.pages[job.pages.length-1];job.currentPageName=last?.pageName||"";job.currentPageStatus=last?.status||"";}
+    job.currentPageName=crawler.currentPageName||"";
+    if(Array.isArray(crawler.results?.pages)){
+        const completedPages=crawler.results.pages;
+        job.pages=completedPages.slice();
+        const liveUrl=crawler.currentPageUrl||"";
+        const liveName=crawler.currentPageName||"";
+        if(liveUrl&&!completedPages.some(p=>(p.url||p.pageUrl||p.finalUrl)===liveUrl)){
+            job.pages.push({url:liveUrl,finalUrl:liveUrl,pageName:liveName,status:"RUNNING",adobeTracked:false,adobeStatus:"RUNNING"});
+        }else if(liveUrl&&liveName){
+            const liveIndex=job.pages.findIndex(p=>(p.url||p.pageUrl||p.finalUrl)===liveUrl);
+            if(liveIndex>=0&&job.pages[liveIndex].status==="RUNNING")job.pages[liveIndex].pageName=liveName;
+        }
+    }
+    if(Array.isArray(crawler.results?.pages)&&crawler.results.pages.length){const last=crawler.results.pages[crawler.results.pages.length-1];job.currentPageStatus=last?.status||"";}
     if(crawler.results?.summary)job.summary=crawler.results.summary;
 }
 
