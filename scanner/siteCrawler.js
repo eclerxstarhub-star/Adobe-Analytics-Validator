@@ -26,8 +26,10 @@ progress(){try{this.onProgress()}catch(e){}}
 
 async createDriver(){
 const options=new chrome.Options;
+const headless=String(process.env.CHROME_HEADLESS||"false").toLowerCase()==="true";
 options.setPageLoadStrategy("eager");
-options.addArguments("--headless=new","--disable-gpu","--disable-software-rasterizer","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080","--blink-settings=imagesEnabled=false");
+options.addArguments("--disable-gpu","--disable-software-rasterizer","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080","--blink-settings=imagesEnabled=false");
+if(headless)options.addArguments("--headless=new");
 options.setLoggingPrefs({performance:"ALL"});
 options.setPerfLoggingPrefs({enableNetwork:true,enablePage:true});
 this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();
