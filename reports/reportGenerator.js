@@ -17,7 +17,7 @@ function badge(v){const s=String(v).toUpperCase();if(s==="PASS"||s==="YES")retur
 function val(v){return v==null||String(v)===""?'<span class="muted">-</span>':e(v)}
 function variableRows(p,r,type){
 const rows=[],seen=new Set(),ph=pageLoadHits(p,r),cts=ctaRecords(p).map(ctaDetails);
-const add=(key,value,cta)=>{const id=type+"|"+key+"|"+value+"|"+cta;if(seen.has(id))return;seen.add(id);rows.push({key,value,cta})};
+const add=(key,value,cta)=>{const id=type+"|"+key+"|"+value;if(seen.has(id)){const row=rows.find(x=>x.key===key&&String(x.value)===String(value));if(row&&cta)row.cta=true;return}seen.add(id);rows.push({key,value,cta:!!cta})};
 if(type==="eVar"){allHits(p,r).forEach(h=>Object.entries(evars(h)).forEach(([k,v])=>arr(v).forEach(x=>add(k,x,ctaHit(h)))));cts.forEach(c=>{if(c.captured&&c.ev24)add("v24",c.ev24,true)})}
 if(type==="prop"){allHits(p,r).forEach(h=>Object.entries(props(h)).forEach(([k,v])=>arr(v).forEach(x=>add(k,x,ctaHit(h)))))}
 if(type==="event"){ph.forEach(h=>events(h).forEach(x=>{if(String(x).toLowerCase()==="event217")add(x,"1",false);else if(String(x).toLowerCase()!=="event6")add(x,"1",false)}));cts.forEach(c=>{if(c.captured&&c.event6)add("event6","1",true)})}
