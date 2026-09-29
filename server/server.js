@@ -3,6 +3,8 @@ const path=require("path");
 const fs=require("fs");
 const PreSalesJourneyValidator=require("../scanner/preSalesJourneyValidator");
 const preSalesReportGenerator=require("../reports/preSalesReportGenerator");
+const SiteCrawler=require("../scanner/siteCrawler");
+const reportGenerator=require("../reports/reportGenerator");
 const app=express();
 const PORT=process.env.PORT||3000;
 let currentJob=null;
@@ -307,6 +309,76 @@ function createPreSalesJobFromBody(body){
     };
 }
 
+function validateAnalyticsUrl(value){
+    const url=String(value||"").trim();
+    if(!url)return{error:"Analytics Website URL is required."};
+    let parsed;
+    try{parsed=new URL(url)}catch(_){return{error:"Analytics Website URL is invalid."}}
+    if(!["http:","https:"].includes(parsed.protocol))return{error:"Analytics Website URL must start with http:// or https://"};
+    if(!parsed.hostname)return{error:"Analytics Website URL is invalid."};
+    return{url:parsed.toString()};
+}
+
+function getAnalyticsInputs(body){
+    const source=body||{};
+    const options=source.options&&typeof source.options==="object"?source.options:{};
+    const rawValidations=source.validations||options.validations||{};
+    return{url:String(source.url||source.websiteUrl||options.url||options.websiteUrl||"").trim(),validationType:String(source.validationType||options.validationType||"singlePage").trim().toLowerCase(),validations:{pageLoad:rawValidations.pageLoad!==false,eVars:rawValidations.eVars!==false,props:rawValidations.props!==false,events:rawValidations.events!==false,products:rawValidations.products!==false,cta:rawValidations.cta!==false},maxPages:Number(source.maxPages||options.maxPages||25),options};
+}
+
+function createAnalyticsJobFromBody(body){
+    const inputs=getAnalyticsInputs(body);
+    const urlValidation=validateAnalyticsUrl(inputs.url);
+    if(urlValidation.error)return{error:urlValidation.error};
+    if(!["singlepage","sitewide"].includes(inputs.validationType))return{error:"validationType must be singlePage or sitewide."};
+    if(!Number.isFinite(inputs.maxPages)||inputs.maxPages<1)return{error:"maxPages must be a positive number."};
+    return{job:createJob({mode:"analytics",url:urlValidation.url,websiteUrl:urlValidation.url,validationType:inputs.validationType,validations:inputs.validations,maxPages:Math.floor(inputs.maxPages),options:inputs.options})};
+}
+
+function syncAnalyticsState(job,crawler){
+    if(!job||!crawler)return;
+    job.currentStep=crawler.currentStep||job.currentStep||null;
+    job.currentAction=crawler.currentAction||job.currentAction||null;
+    job.currentCta=crawler.currentCTA||job.currentCta||null;
+    job.currentPage=crawler.currentPageUrl||job.currentPage||null;
+    if(Array.isArray(crawler.results?.pages))job.pages=crawler.results.pages;
+    if(Array.isArray(job.pages)&&job.pages.length){const last=job.pages[job.pages.length-1];job.currentPageName=last?.pageName||"";job.currentPageStatus=last?.status||"";}
+    if(crawler.results?.summary)job.summary=crawler.results.summary;
+}
+
+async function runAnalyticsJob(job){
+    job.status="RUNNING";job.startedAt=new Date().toISOString();
+    let crawler=null,stateSync=null;
+    try{
+        const inputs=job.inputs||{};
+        addJobLog(job,"Adobe Analytics validation started.");
+        addJobLog(job,"Validation type: "+(inputs.validationType||"singlePage"));
+        addJobLog(job,"Selected URL: "+inputs.url);
+        addJobLog(job,"CTA validation: "+(inputs.validations?.cta===false?"Disabled":"Enabled"));
+        crawler=new SiteCrawler({maxPages:inputs.maxPages||25,maxAdobeWait:30000,postAdobeWait:2000,ctaClickWait:8000,ctaPollInterval:250,logger:(level,message)=>{addJobLog(job,message,level);syncAnalyticsState(job,crawler)},onProgress:()=>syncAnalyticsState(job,crawler)});
+        activeValidator=crawler;
+        stateSync=setInterval(()=>syncAnalyticsState(job,crawler),500);
+        job.currentStep=inputs.validationType==="sitewide"?"Starting website crawl":"Starting single-page validation";
+        const result=inputs.validationType==="sitewide"?await crawler.scan(inputs.url,inputs.maxPages||25):await crawler.scanSelectedUrls([inputs.url]);
+        syncAnalyticsState(job,crawler);
+        const output=path.join(__dirname,"..","reports","output");
+        fs.mkdirSync(output,{recursive:true});
+        const reportFile=await reportGenerator.generateHTML(result,output);
+        job.reportPath="/reports/"+path.basename(reportFile);
+        job.pages=Array.isArray(result?.pages)?result.pages:[];job.summary=result?.summary||null;job.finishedAt=new Date().toISOString();
+        job.status=result?.summary?.status==="FAIL"?"FAILED":"COMPLETED";
+        if(job.status==="FAILED"){const lastError=Array.isArray(result?.errors)&&result.errors.length?result.errors[result.errors.length-1]:null;job.error=lastError?.error||lastError?.message||"Analytics validation failed."}else job.error=null;
+        addJobLog(job,"Analytics report generated: "+job.reportPath);addJobLog(job,"Analytics validation finished with status "+job.status+".");
+        return result;
+    }catch(error){
+        const reason=error?.message||String(error);
+        addJobLog(job,"Analytics validation failed: "+reason,"ERROR");job.status="FAILED";job.error=reason;job.finishedAt=new Date().toISOString();
+        try{if(crawler?.results){const output=path.join(__dirname,"..","reports","output");fs.mkdirSync(output,{recursive:true});const reportFile=await reportGenerator.generateHTML(crawler.results,output);job.reportPath="/reports/"+path.basename(reportFile)}}catch(reportError){addJobLog(job,"Unable to generate Analytics failure report: "+(reportError.message||reportError),"ERROR")}
+        return null;
+    }finally{
+        if(stateSync)clearInterval(stateSync);if(crawler)syncAnalyticsState(job,crawler);if(activeValidator===crawler)activeValidator=null;job.currentStep=job.status==="FAILED"?"Validation failed":"Validation completed";if(crawler?.driver)await crawler.quitDriver().catch(()=>{});
+    }
+}
 async function generateFailureReport(job,validator,reason){
     try{
         if(!preSalesReportGenerator||typeof preSalesReportGenerator.generatePreSalesHTML!=="function"){
@@ -577,55 +649,16 @@ app.get("/api/journeys/current",(req,res)=>{
 });
 
 app.post("/api/jobs",async(req,res)=>{
-    const body=req.body||{};
-
-    if(body.mode&&body.mode!=="presales"){
-        return res.status(400).json({
-            success:false,
-            error:"Only Pre-Sales Journey Validation is currently supported."
-        });
-    }
-
-    const created=createPreSalesJobFromBody(body);
-
-    if(created.error){
-        return res.status(400).json({
-            success:false,
-            error:created.error,
-            message:created.error
-        });
-    }
-
-    if(isJobRunning()){
-        return res.status(409).json({
-            success:false,
-            error:"Another journey is currently running. Please wait.",
-            message:"Another journey is currently running. Please wait."
-        });
-    }
-
-    currentJob=created.job;
-
-    addJobLog(currentJob,"Pre-Sales Journey validation job created and queued.");
-
-    runPreSalesJourney(currentJob).catch(error=>{
-        console.error("Unexpected journey error:",error);
-
-        if(currentJob){
-            currentJob.status="FAILED";
-            currentJob.finishedAt=new Date().toISOString();
-            currentJob.error=error?.message||String(error);
-            addJobLog(currentJob,currentJob.error,"ERROR");
-        }
-    });
-
-    return res.status(202).json({
-        success:true,
-        message:"Pre-Sales Journey validation started.",
-        jobId:currentJob.id,
-        status:currentJob.status,
-        startedAt:currentJob.startedAt
-    });
+    const body=req.body||{};const mode=String(body.mode||"presales").trim().toLowerCase();
+    let created,runner,message;
+    if(mode==="analytics"){created=createAnalyticsJobFromBody(body);runner=runAnalyticsJob;message="Adobe Analytics validation started."}
+    else if(mode==="presales"){created=createPreSalesJobFromBody(body);runner=runPreSalesJourney;message="Pre-Sales Journey validation started."}
+    else return res.status(400).json({success:false,error:"Unsupported validation mode."});
+    if(created.error)return res.status(400).json({success:false,error:created.error,message:created.error});
+    if(isJobRunning())return res.status(409).json({success:false,error:"Another validation is currently running. Please wait.",message:"Another validation is currently running. Please wait."});
+    currentJob=created.job;addJobLog(currentJob,mode==="analytics"?"Adobe Analytics validation job created and queued.":"Pre-Sales Journey validation job created and queued.");
+    runner(currentJob).catch(error=>{console.error("Unexpected validation error:",error);if(currentJob){currentJob.status="FAILED";currentJob.finishedAt=new Date().toISOString();currentJob.error=error?.message||String(error);addJobLog(currentJob,currentJob.error,"ERROR")}});
+    return res.status(202).json({success:true,message,jobId:currentJob.id,status:currentJob.status,startedAt:currentJob.startedAt});
 });
 
 app.get("/api/jobs/:jobId",(req,res)=>{
