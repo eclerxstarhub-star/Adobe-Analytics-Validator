@@ -18,8 +18,8 @@ function val(v){return v==null||String(v)===""?'<span class="muted">-</span>':e(
 function variableRows(p,r,type){
 const rows=[],seen=new Set(),ph=pageLoadHits(p,r),cts=ctaRecords(p).map(ctaDetails);
 const add=(key,value,cta)=>{const id=type+"|"+key+"|"+value+"|"+cta;if(seen.has(id))return;seen.add(id);rows.push({key,value,cta})};
-if(type==="eVar"){allHits(p,r).forEach(h=>Object.entries(evars(h)).forEach(([k,v])=>arr(v).forEach(x=>add(k,x,ctaHit(h))));cts.forEach(c=>{if(c.captured&&c.ev24)add("v24",c.ev24,true)})}
-if(type==="prop"){allHits(p,r).forEach(h=>Object.entries(props(h)).forEach(([k,v])=>arr(v).forEach(x=>add(k,x,ctaHit(h))))}
+if(type==="eVar"){allHits(p,r).forEach(h=>Object.entries(evars(h)).forEach(([k,v])=>arr(v).forEach(x=>add(k,x,ctaHit(h)))));cts.forEach(c=>{if(c.captured&&c.ev24)add("v24",c.ev24,true)})}
+if(type==="prop"){allHits(p,r).forEach(h=>Object.entries(props(h)).forEach(([k,v])=>arr(v).forEach(x=>add(k,x,ctaHit(h)))))}
 if(type==="event"){ph.forEach(h=>events(h).forEach(x=>{if(String(x).toLowerCase()==="event217")add(x,"1",false);else if(String(x).toLowerCase()!=="event6")add(x,"1",false)}));cts.forEach(c=>{if(c.captured&&c.event6)add("event6","1",true)})}
 return rows}
 function pageRows(p,r){return{pageLoad:pageLoadHits(p,r),evars:variableRows(p,r,"eVar"),props:variableRows(p,r,"prop"),events:variableRows(p,r,"event")}}
