@@ -6,6 +6,7 @@ this.driver=null;
 this.logger=options.logger||(()=>{});
 this.onProgress=options.onProgress||(()=>{});
 this.currentPageUrl="";
+this.currentPageName="";
 this.currentStep="Starting crawl";
 this.currentAction="";
 this.currentCTA="";
@@ -918,6 +919,7 @@ await this.driver.get(pageUrl);
 this.currentPageUrl=this.normalizeUrl(
 await this.driver.getCurrentUrl()
 );
+this.currentPageName="";
 
 /* Capture early network activity before long page waits. */
 const earlyPageHits=await this.collectNetworkData();
@@ -987,6 +989,9 @@ pageResult.adobeHits=uniquePageHits;
 pageResult.adobeTracked=uniquePageHits.length>0;
 pageResult.adobeStatus=pageResult.adobeTracked?"PASS":"FAIL";
 pageResult.pageName=latestHit?.pageName||domPageName||"";
+this.currentPageName=pageResult.pageName||"";
+this.currentAction="Page name captured";
+this.progress();
 
 if(latestHit){
 
@@ -1088,6 +1093,7 @@ this.mergePageResult(pageResult);
 
 this.currentPageUrl=
 pageResult.finalUrl||pageResult.url;
+this.currentPageName=pageResult.pageName||"";
 
 this.currentStep=
 `Completed page ${pageNumber}`;
@@ -1157,6 +1163,7 @@ this.visited=new Set;
 this.queue=[];
 
 this.currentStep="Starting selected URL validation";
+this.currentPageName="";
 this.currentAction="";
 this.currentCTA="";
 
@@ -1211,6 +1218,7 @@ this.queue=[baseUrl];
 
 this.currentStep="Starting website crawl";
 this.currentPageUrl=baseUrl;
+this.currentPageName="";
 this.currentAction="";
 this.currentCTA="";
 this.progress();
@@ -1260,6 +1268,7 @@ this.currentStep=
 
 this.currentAction="";
 this.currentCTA="";
+this.currentPageName="";
 this.progress();
 
 }finally{
