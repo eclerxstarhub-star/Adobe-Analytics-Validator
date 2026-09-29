@@ -1143,6 +1143,7 @@ Array.isArray(job.pages)
 ?job.pages
 :[],
 job.currentPage,
+job.currentPageName,
 job.currentAction,
 job.currentCta
 );
@@ -1528,6 +1529,7 @@ reportSection.classList.remove(
 function updatePageTracker(
 pages,
 currentPage,
+currentPageName,
 currentAction,
 currentCta
 ){
@@ -1552,6 +1554,21 @@ document.getElementById(
 "currentPageValue"
 ).textContent=
 currentPage;
+document.getElementById(
+"currentPageNameValue"
+).textContent=
+currentPageName||
+"-";
+document.getElementById(
+"currentActionValue"
+).textContent=
+currentAction||
+"-";
+document.getElementById(
+"currentCtaValue"
+).textContent=
+currentCta||
+"-";
 
 }else{
 
