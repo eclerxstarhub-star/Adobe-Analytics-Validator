@@ -686,17 +686,14 @@ this.currentAction=`Clicking CTA ${i+1} of ${list.length}`;
 this.progress();
 
 try{
-await element.click();
+/* Use JS click so navigation does not block network-log capture. */
+await this.driver.executeScript("arguments[0].click();",element);
 }catch(clickError){
 this.log(
 "WARN",
-`Normal click failed for ${validation.ctaName}; using JavaScript click.`
+`JavaScript click failed for ${validation.ctaName}; using WebDriver click.`
 );
-
-await this.driver.executeScript(
-"arguments[0].click();",
-element
-);
+await element.click();
 }
 
 /*
@@ -727,13 +724,8 @@ const ctaHits=hits.filter(hit=>this.isCTAAdobeHit(hit));
 /*
  * 8. event6 and v24 may be on separate hits.
  */
-const event6Hit=
-ctaHits.find(hit=>this.hitHasEvent6(hit))||
-hits.find(hit=>this.hitHasEvent6(hit));
-
-const eVar24Hit=
-ctaHits.find(hit=>this.getHitEVar24(hit)!=="")||
-hits.find(hit=>this.getHitEVar24(hit)!=="");
+const event6Hit=ctaHits.find(hit=>this.hitHasEvent6(hit))||null;
+const eVar24Hit=ctaHits.find(hit=>this.getHitEVar24(hit)!=="")||null;
 
 validation.adobeHitCount=hits.length;
 validation.ctaAdobeHitCount=ctaHits.length;
@@ -764,10 +756,9 @@ hits[hits.length-1]||
 null;
 
 /*
- * 9. PASS requires both values.
- * They do NOT need to be in the same hit.
+ * 9. PASS requires event6 and v24/eVar24 on an actual CTA tracking hit.
  */
-if(validation.event6&&validation.eVar24){
+if(validation.event6&&validation.eVar24&&ctaHits.some(hit=>this.hitHasEvent6(hit)&&this.getHitEVar24(hit)!=="")){
 
 validation.status="PASS";
 validation.validation="PASS";
@@ -927,6 +918,9 @@ this.currentPageUrl=this.normalizeUrl(
 await this.driver.getCurrentUrl()
 );
 
+/* Capture early network activity before long page waits. */
+const earlyPageHits=await this.collectNetworkData();
+
 await this.driver.wait(
 until.elementLocated(By.css("body")),
 15000
@@ -968,10 +962,11 @@ this.currentAction="Capturing Adobe Analytics";
 this.progress();
 
 const pageHits=await this.captureAdobeHits(this.maxAdobeWait);
+const allCapturedPageHits=[...earlyPageHits,...pageHits];
 const uniquePageHits=[];
 const pageSeen=new Set;
 
-for(const hit of pageHits){
+for(const hit of allCapturedPageHits){
 
 const key=
 hit.requestId||
