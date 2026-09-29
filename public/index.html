@@ -33,9 +33,9 @@ input:focus,select:focus{outline:none;border-color:#1d3557}
 button{border:none;border-radius:6px;padding:12px 20px;cursor:pointer;font-size:14px;font-weight:bold}
 .btn-primary{background:#1d3557;color:white}
 .btn-primary:hover{background:#14253e}
+.btn-primary:disabled{background:#9ca3af;cursor:not-allowed}
 .btn-secondary{background:#e5e7eb;color:#1f2937}
 .btn-secondary:hover{background:#d1d5db}
-.btn-primary:disabled{background:#9ca3af;cursor:not-allowed}
 .job-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
 .job-field{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:13px}
 .job-label{font-size:11px;color:#64748b;text-transform:uppercase;margin-bottom:6px}
@@ -74,6 +74,8 @@ button{border:none;border-radius:6px;padding:12px 20px;cursor:pointer;font-size:
 .page-status.pass{color:#166534}
 .page-status.fail{color:#991b1b}
 .page-status.running{color:#1d4ed8}
+.live-indicator{display:inline-flex;align-items:center;gap:6px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#1d4ed8;display:inline-block}
 @media(max-width:700px){
 .summary-grid{grid-template-columns:1fr}
 .summary-header{align-items:flex-start}
@@ -184,8 +186,13 @@ CTA Validation
 </div>
 
 <div class="button-row">
-<button type="submit" class="btn-primary">Start Validation</button>
-<button type="button" class="btn-secondary" onclick="returnToMenu()">Back</button>
+<button type="submit" class="btn-primary" id="analyticsStartButton">
+Start Validation
+</button>
+
+<button type="button" class="btn-secondary" onclick="returnToMenu()">
+Back
+</button>
 </div>
 
 </form>
@@ -204,6 +211,7 @@ CTA Validation
 
 <div class="form-group full-width">
 <label for="presalesUrl">Pre-Sales Website URL</label>
+
 <input
 type="url"
 id="presalesUrl"
@@ -214,11 +222,18 @@ required
 
 <div class="form-group">
 <label for="hubId">Hub ID</label>
-<input type="text" id="hubId" placeholder="Enter Hub ID" required>
+
+<input
+type="text"
+id="hubId"
+placeholder="Enter Hub ID"
+required
+>
 </div>
 
 <div class="form-group">
 <label for="paymentMode">Payment Mode</label>
+
 <select id="paymentMode" required>
 <option value="">Select Payment Mode</option>
 <option value="Pay Later">Pay Later</option>
@@ -228,6 +243,7 @@ required
 
 <div class="form-group" id="paymentPeriodGroup">
 <label for="paymentPeriod">Pay Later Period</label>
+
 <select id="paymentPeriod">
 <option value="">Select Period</option>
 <option value="36">36 Months</option>
@@ -238,6 +254,7 @@ required
 
 <div class="form-group">
 <label for="simType">SIM Type</label>
+
 <select id="simType" required>
 <option value="">Select SIM Type</option>
 <option value="eSIM">eSIM</option>
@@ -248,8 +265,23 @@ required
 </div>
 
 <div class="button-row">
-<button type="submit" class="btn-primary">Start Validation</button>
-<button type="button" class="btn-secondary" onclick="returnToMenu()">Back</button>
+
+<button
+type="submit"
+class="btn-primary"
+id="presalesStartButton"
+>
+Start Validation
+</button>
+
+<button
+type="button"
+class="btn-secondary"
+onclick="returnToMenu()"
+>
+Back
+</button>
+
 </div>
 
 </form>
@@ -258,8 +290,13 @@ required
 <section id="jobSection" class="card hidden">
 
 <div class="section-heading">
+
 <h2>Job Details</h2>
-<span id="jobStatus" class="status status-idle">NOT STARTED</span>
+
+<span id="jobStatus" class="status status-idle">
+NOT STARTED
+</span>
+
 </div>
 
 <div class="job-grid">
@@ -303,8 +340,14 @@ required
 <section id="logSection" class="card hidden">
 
 <div class="section-heading">
+
 <h2>Timestamped Execution Log</h2>
-<span class="status status-running">Live Log</span>
+
+<span class="status status-running live-indicator">
+<span class="live-dot"></span>
+Live Log
+</span>
+
 </div>
 
 <div id="logBox" class="log-box">
@@ -322,19 +365,26 @@ Waiting for job logs...
 <div id="currentPageBox" class="job-field">
 
 <div class="job-label">Current Page</div>
-<div id="currentPageValue" class="job-value">-</div>
+
+<div id="currentPageValue" class="job-value">
+-
+</div>
 
 <div class="job-label" style="margin-top:10px">
 Current Action
 </div>
 
-<div id="currentActionValue" class="job-value">-</div>
+<div id="currentActionValue" class="job-value">
+-
+</div>
 
 <div class="job-label" style="margin-top:10px">
 Current CTA
 </div>
 
-<div id="currentCtaValue" class="job-value">-</div>
+<div id="currentCtaValue" class="job-value">
+-
+</div>
 
 </div>
 
@@ -352,9 +402,13 @@ Current CTA
 </thead>
 
 <tbody id="pageTableBody">
+
 <tr>
-<td colspan="4">Waiting for page data...</td>
+<td colspan="4">
+Waiting for page data...
+</td>
 </tr>
+
 </tbody>
 
 </table>
@@ -370,7 +424,8 @@ Current CTA
 <h2>Validation Summary</h2>
 
 <div class="total-time">
-Total Time Taken: <span id="totalTime">00:00</span>
+Total Time Taken:
+<span id="totalTime">00:00</span>
 </div>
 
 </div>
@@ -378,18 +433,39 @@ Total Time Taken: <span id="totalTime">00:00</span>
 <div class="summary-grid">
 
 <div class="summary-item">
-<div id="journeyResult" class="summary-value">-</div>
-<div class="summary-label">Journey Validation</div>
+
+<div id="journeyResult" class="summary-value">
+-
+</div>
+
+<div class="summary-label">
+Journey Validation
+</div>
+
 </div>
 
 <div class="summary-item">
-<div id="adobeResult" class="summary-value">-</div>
-<div class="summary-label">Adobe Analytics</div>
+
+<div id="adobeResult" class="summary-value">
+-
+</div>
+
+<div class="summary-label">
+Adobe Analytics
+</div>
+
 </div>
 
 <div class="summary-item">
-<div id="ctaResult" class="summary-value">-</div>
-<div class="summary-label">CTA Validation</div>
+
+<div id="ctaResult" class="summary-value">
+-
+</div>
+
+<div class="summary-label">
+CTA Validation
+</div>
+
 </div>
 
 </div>
@@ -400,12 +476,21 @@ Total Time Taken: <span id="totalTime">00:00</span>
 
 <div class="report-row">
 
-<div class="job-label">Report</div>
+<div class="job-label">
+Report
+</div>
 
 <div class="job-value">
-<a id="reportLink" href="#" target="_blank" rel="noopener">
+
+<a
+id="reportLink"
+href="#"
+target="_blank"
+rel="noopener"
+>
 Open Report
 </a>
+
 </div>
 
 </div>
@@ -419,47 +504,106 @@ Open Report
 let activeMode=null;
 let activeJobId=null;
 let pollingTimer=null;
+let pollingInProgress=false;
 
-const mainMenu=document.getElementById("mainMenu");
-const analyticsForm=document.getElementById("analyticsForm");
-const presalesForm=document.getElementById("presalesForm");
-const jobSection=document.getElementById("jobSection");
-const logSection=document.getElementById("logSection");
-const summarySection=document.getElementById("summarySection");
-const pagesSection=document.getElementById("pagesSection");
-const reportSection=document.getElementById("reportSection");
+const mainMenu=
+document.getElementById("mainMenu");
 
-const analyticsValidationType=document.getElementById("analyticsValidationType");
-const analyticsUrl=document.getElementById("analyticsUrl");
-const analyticsUrlGroup=document.getElementById("analyticsUrlGroup");
+const analyticsForm=
+document.getElementById("analyticsForm");
+
+const presalesForm=
+document.getElementById("presalesForm");
+
+const jobSection=
+document.getElementById("jobSection");
+
+const logSection=
+document.getElementById("logSection");
+
+const summarySection=
+document.getElementById("summarySection");
+
+const pagesSection=
+document.getElementById("pagesSection");
+
+const reportSection=
+document.getElementById("reportSection");
+
+const analyticsValidationType=
+document.getElementById(
+"analyticsValidationType"
+);
+
+const analyticsUrl=
+document.getElementById(
+"analyticsUrl"
+);
+
+const analyticsUrlGroup=
+document.getElementById(
+"analyticsUrlGroup"
+);
+
+const paymentMode=
+document.getElementById(
+"paymentMode"
+);
+
+const paymentPeriodGroup=
+document.getElementById(
+"paymentPeriod"
+);
+
+const paymentPeriodContainer=
+document.getElementById(
+"paymentPeriodGroup"
+);
 
 function hideAllForms(){
-analyticsForm.classList.add("hidden");
-presalesForm.classList.add("hidden");
+
+analyticsForm.classList.add(
+"hidden"
+);
+
+presalesForm.classList.add(
+"hidden"
+);
+
 }
 
 function showValidationForm(mode){
 
 activeMode=mode;
 
-mainMenu.classList.add("hidden");
+mainMenu.classList.add(
+"hidden"
+);
 
 hideAllForms();
 
 if(mode==="analytics"){
 
-analyticsForm.classList.remove("hidden");
+analyticsForm.classList.remove(
+"hidden"
+);
 
 analyticsValidationType.value="";
 analyticsUrl.value="";
-analyticsUrlGroup.classList.add("hidden");
+
+analyticsUrlGroup.classList.add(
+"hidden"
+);
+
 analyticsUrl.required=false;
 
 }
 
 if(mode==="presales"){
 
-presalesForm.classList.remove("hidden");
+presalesForm.classList.remove(
+"hidden"
+);
 
 }
 
@@ -467,160 +611,346 @@ presalesForm.classList.remove("hidden");
 
 function returnToMenu(){
 
-if(pollingTimer){
-clearInterval(pollingTimer);
-pollingTimer=null;
-}
+stopPolling();
 
 activeMode=null;
 activeJobId=null;
 
 hideAllForms();
 
-mainMenu.classList.remove("hidden");
+mainMenu.classList.remove(
+"hidden"
+);
 
 }
 
-analyticsValidationType.addEventListener("change",function(){
+analyticsValidationType.addEventListener(
+"change",
+function(){
 
 if(this.value){
 
-analyticsUrlGroup.classList.remove("hidden");
+analyticsUrlGroup.classList.remove(
+"hidden"
+);
+
 analyticsUrl.required=true;
 
 }else{
 
-analyticsUrlGroup.classList.add("hidden");
+analyticsUrlGroup.classList.add(
+"hidden"
+);
+
 analyticsUrl.required=false;
 analyticsUrl.value="";
 
 }
 
-});
+}
+);
 
-const paymentMode=document.getElementById("paymentMode");
-const paymentPeriodGroup=document.getElementById("paymentPeriod");
-const paymentPeriodContainer=document.getElementById("paymentPeriodGroup");
-
-paymentMode.addEventListener("change",function(){
+paymentMode.addEventListener(
+"change",
+function(){
 
 if(this.value==="Pay Later"){
 
-paymentPeriodContainer.classList.remove("hidden");
+paymentPeriodContainer.classList.remove(
+"hidden"
+);
+
 paymentPeriodGroup.required=true;
 
 }else{
 
-paymentPeriodContainer.classList.add("hidden");
+paymentPeriodContainer.classList.add(
+"hidden"
+);
+
 paymentPeriodGroup.required=false;
 paymentPeriodGroup.value="";
 
 }
 
-});
+}
+);
 
-document.getElementById("presalesValidationForm").addEventListener("submit",async function(event){
+document
+.getElementById(
+"presalesValidationForm"
+)
+.addEventListener(
+"submit",
+async function(event){
 
 event.preventDefault();
 
 const payload={
 mode:"presales",
-url:document.getElementById("presalesUrl").value.trim(),
-hubId:document.getElementById("hubId").value.trim(),
-paymentMode:paymentMode.value,
-simType:document.getElementById("simType").value
+
+url:
+document.getElementById(
+"presalesUrl"
+).value.trim(),
+
+hubId:
+document.getElementById(
+"hubId"
+).value.trim(),
+
+paymentMode:
+paymentMode.value,
+
+simType:
+document.getElementById(
+"simType"
+).value
 };
 
 if(paymentMode.value==="Pay Later"){
-payload.paymentPeriod=paymentPeriodGroup.value;
+
+payload.paymentPeriod=
+paymentPeriodGroup.value;
+
 }
 
 await startJob(payload);
 
-});
+}
+);
 
-document.getElementById("analyticsValidationForm").addEventListener("submit",async function(event){
+document
+.getElementById(
+"analyticsValidationForm"
+)
+.addEventListener(
+"submit",
+async function(event){
 
 event.preventDefault();
 
-const validationType=analyticsValidationType.value;
+const validationType=
+analyticsValidationType.value;
 
 const payload={
 mode:"analytics",
+
 validationType,
-url:analyticsUrl.value.trim(),
+
+url:
+analyticsUrl.value.trim(),
+
 validations:{
-pageLoad:document.getElementById("validatePageLoad").checked,
-eVars:document.getElementById("validateEvars").checked,
-props:document.getElementById("validateProps").checked,
-events:document.getElementById("validateEvents").checked,
-products:document.getElementById("validateProducts").checked,
-cta:document.getElementById("validateCta").checked
+pageLoad:
+document.getElementById(
+"validatePageLoad"
+).checked,
+
+eVars:
+document.getElementById(
+"validateEvars"
+).checked,
+
+props:
+document.getElementById(
+"validateProps"
+).checked,
+
+events:
+document.getElementById(
+"validateEvents"
+).checked,
+
+products:
+document.getElementById(
+"validateProducts"
+).checked,
+
+cta:
+document.getElementById(
+"validateCta"
+).checked
 }
 };
 
 await startJob(payload);
 
-});
+}
+);
 
 async function startJob(payload){
 
 try{
 
-const response=await fetch("/api/jobs",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify(payload)
-});
+stopPolling();
 
-const result=await response.json();
-
-if(!response.ok){
-throw new Error(result.error||"Unable to start validation job.");
-}
-
-activeJobId=result.jobId;
-
-jobSection.classList.remove("hidden");
-logSection.classList.remove("hidden");
-summarySection.classList.remove("hidden");
-pagesSection.classList.remove("hidden");
-
-reportSection.classList.add("hidden");
-
-document.getElementById("jobId").textContent=activeJobId;
-document.getElementById("jobStatusText").textContent="QUEUED";
-document.getElementById("currentStep").textContent="Job queued";
-
-document.getElementById("startedAt").textContent=formatDate(result.startedAt);
-document.getElementById("completedAt").textContent="-";
-document.getElementById("duration").textContent="-";
-
-document.getElementById("currentPageValue").textContent="-";
-document.getElementById("currentActionValue").textContent="-";
-document.getElementById("currentCtaValue").textContent="-";
-
-document.getElementById("totalTime").textContent="00:00";
-
-setSummaryValue("journeyResult","RUNNING","running");
-setSummaryValue("adobeResult","-","");
-setSummaryValue("ctaResult","-","");
-
-updateStatus("QUEUED");
-
-document.getElementById("logBox").textContent=
-`[${getTime()}] Job created: ${activeJobId}\n`;
-
-pollingTimer=setInterval(
-()=>pollJobStatus(activeJobId),
-1500
+setStartButtonsDisabled(
+true
 );
 
-pollJobStatus(activeJobId);
+const response=
+await fetch(
+"/api/jobs",
+{
+method:"POST",
+headers:{
+"Content-Type":
+"application/json"
+},
+cache:"no-store",
+body:
+JSON.stringify(payload)
+}
+);
+
+const result=
+await response.json();
+
+if(!response.ok){
+
+throw new Error(
+result.error||
+result.message||
+"Unable to start validation job."
+);
+
+}
+
+activeJobId=
+result.jobId;
+
+jobSection.classList.remove(
+"hidden"
+);
+
+logSection.classList.remove(
+"hidden"
+);
+
+summarySection.classList.remove(
+"hidden"
+);
+
+pagesSection.classList.remove(
+"hidden"
+);
+
+reportSection.classList.add(
+"hidden"
+);
+
+document.getElementById(
+"jobId"
+).textContent=
+activeJobId;
+
+document.getElementById(
+"jobStatusText"
+).textContent=
+"QUEUED";
+
+document.getElementById(
+"currentStep"
+).textContent=
+"Job queued";
+
+document.getElementById(
+"startedAt"
+).textContent=
+formatDate(
+result.startedAt
+);
+
+document.getElementById(
+"completedAt"
+).textContent=
+"-";
+
+document.getElementById(
+"duration"
+).textContent=
+"00:00";
+
+document.getElementById(
+"currentPageValue"
+).textContent=
+"-";
+
+document.getElementById(
+"currentActionValue"
+).textContent=
+"-";
+
+document.getElementById(
+"currentCtaValue"
+).textContent=
+"-";
+
+document.getElementById(
+"totalTime"
+).textContent=
+"00:00";
+
+setSummaryValue(
+"journeyResult",
+"RUNNING",
+"running"
+);
+
+setSummaryValue(
+"adobeResult",
+"-",
+""
+);
+
+setSummaryValue(
+"ctaResult",
+"-",
+""
+);
+
+updateStatus(
+"QUEUED"
+);
+
+document.getElementById(
+"logBox"
+).textContent=
+`[${getTime()}] Job created: ${activeJobId}\n`;
+
+await pollJobStatus(
+activeJobId
+);
+
+if(activeJobId){
+
+pollingTimer=
+setInterval(
+function(){
+
+if(activeJobId){
+pollJobStatus(
+activeJobId
+);
+}
+
+},
+500
+);
+
+}
 
 }catch(error){
 
-showMessage(error.message,"error");
+showMessage(
+error.message,
+"error"
+);
+
+setStartButtonsDisabled(
+false
+);
 
 }
 
@@ -628,97 +958,193 @@ showMessage(error.message,"error");
 
 async function pollJobStatus(jobId){
 
-try{
-
-const response=await fetch(`/api/jobs/${jobId}`);
-
-if(!response.ok){
-throw new Error("Unable to retrieve job status.");
+if(
+pollingInProgress||
+!jobId
+){
+return;
 }
 
-const job=await response.json();
+pollingInProgress=true;
+
+try{
+
+const response=
+await fetch(
+`/api/jobs/${encodeURIComponent(jobId)}`,
+{
+cache:"no-store",
+headers:{
+"Cache-Control":
+"no-cache"
+}
+}
+);
+
+if(!response.ok){
+
+throw new Error(
+"Unable to retrieve job status."
+);
+
+}
+
+const job=
+await response.json();
+
+if(!job){
+return;
+}
 
 const normalizedStatus=
-String(job.status||"").toUpperCase();
+String(
+job.status||""
+).toUpperCase();
 
-updateStatus(normalizedStatus);
+updateStatus(
+normalizedStatus
+);
 
-document.getElementById("jobStatusText").textContent=
+document.getElementById(
+"jobStatusText"
+).textContent=
 job.status||"-";
 
-document.getElementById("startedAt").textContent=
-formatDate(job.startedAt);
+document.getElementById(
+"startedAt"
+).textContent=
+formatDate(
+job.startedAt
+);
 
-document.getElementById("completedAt").textContent=
-formatDate(job.completedAt||job.finishedAt);
+document.getElementById(
+"completedAt"
+).textContent=
+formatDate(
+job.completedAt||
+job.finishedAt
+);
 
 const calculatedDuration=
 calculateDuration(
 job.startedAt,
-job.completedAt||job.finishedAt
+job.completedAt||
+job.finishedAt
 );
 
-document.getElementById("duration").textContent=
+document.getElementById(
+"duration"
+).textContent=
 calculatedDuration;
 
-document.getElementById("totalTime").textContent=
+document.getElementById(
+"totalTime"
+).textContent=
 calculatedDuration;
 
-document.getElementById("currentStep").textContent=
+document.getElementById(
+"currentStep"
+).textContent=
 job.currentStep||
-job.currentPage?.step||
 "-";
 
 if(job.error){
 
 showMessage(
 job.error,
-normalizedStatus==="FAILED"||normalizedStatus==="ERROR"
+normalizedStatus==="FAILED"||
+normalizedStatus==="ERROR"
 ?"error"
 :"success"
 );
+
+}else{
+
+hideMessage();
 
 }
 
 if(Array.isArray(job.logs)){
 
-document.getElementById("logBox").textContent=
-job.logs.map(log=>{
+const logText=
+job.logs
+.map(
+function(log){
 
 if(typeof log==="string"){
 return log;
 }
 
-const timestamp=log.timestamp
+const timestamp=
+log.timestamp
 ?`[${formatTime(log.timestamp)}]`
 :`[${getTime()}]`;
 
-const level=log.level
+const level=
+log.level
 ?`[${log.level}]`
 :"";
 
 return`${timestamp} ${level} ${log.message||""}`;
 
-}).join("\n");
+}
+)
+.join("\n");
 
-const logBox=document.getElementById("logBox");
-logBox.scrollTop=logBox.scrollHeight;
+const logBox=
+document.getElementById(
+"logBox"
+);
+
+if(logBox){
+
+const wasNearBottom=
+logBox.scrollHeight-
+logBox.scrollTop-
+logBox.clientHeight<
+80;
+
+logBox.textContent=
+logText;
+
+if(wasNearBottom){
+
+logBox.scrollTop=
+logBox.scrollHeight;
 
 }
 
-updateJourneySummary(normalizedStatus);
+}
+
+}
+
+updateJourneySummary(
+normalizedStatus
+);
 
 if(job.summary){
-updateSummary(job.summary);
+
+updateSummary(
+job.summary
+);
+
 }
 
 updatePageTracker(
-job.pages||[],
-job.currentPage
+Array.isArray(job.pages)
+?job.pages
+:[],
+job.currentPage,
+job.currentAction,
+job.currentCta
 );
 
 if(job.reportPath){
-showReportLink(job.reportPath);
+
+showReportLink(
+job.reportPath
+);
+
 }
 
 if(
@@ -727,34 +1153,96 @@ normalizedStatus==="FAILED"||
 normalizedStatus==="ERROR"
 ){
 
-clearInterval(pollingTimer);
-pollingTimer=null;
+stopPolling();
 
 const finalDuration=
 calculateDuration(
 job.startedAt,
-job.completedAt||job.finishedAt||new Date().toISOString()
+job.completedAt||
+job.finishedAt||
+new Date().toISOString()
 );
 
-document.getElementById("totalTime").textContent=
+document.getElementById(
+"totalTime"
+).textContent=
 finalDuration;
 
-document.getElementById("duration").textContent=
+document.getElementById(
+"duration"
+).textContent=
 finalDuration;
 
-updateJourneySummary(normalizedStatus);
+updateJourneySummary(
+normalizedStatus
+);
+
+setStartButtonsDisabled(
+false
+);
 
 }
 
 }catch(error){
 
-showMessage(error.message,"error");
+showMessage(
+error.message,
+"error"
+);
+
+}finally{
+
+pollingInProgress=false;
 
 }
 
 }
 
-function updateJourneySummary(status){
+function stopPolling(){
+
+if(pollingTimer){
+
+clearInterval(
+pollingTimer
+);
+
+pollingTimer=null;
+
+}
+
+pollingInProgress=false;
+
+}
+
+function setStartButtonsDisabled(
+disabled
+){
+
+const analyticsButton=
+document.getElementById(
+"analyticsStartButton"
+);
+
+const presalesButton=
+document.getElementById(
+"presalesStartButton"
+);
+
+if(analyticsButton){
+analyticsButton.disabled=
+disabled;
+}
+
+if(presalesButton){
+presalesButton.disabled=
+disabled;
+}
+
+}
+
+function updateJourneySummary(
+status
+){
 
 if(status==="COMPLETED"){
 
@@ -768,7 +1256,10 @@ return;
 
 }
 
-if(status==="FAILED"||status==="ERROR"){
+if(
+status==="FAILED"||
+status==="ERROR"
+){
 
 setSummaryValue(
 "journeyResult",
@@ -788,9 +1279,13 @@ setSummaryValue(
 
 }
 
-function updateSummary(summary){
+function updateSummary(
+summary
+){
 
-if(!summary)return;
+if(!summary){
+return;
+}
 
 const adobeValue=
 summary.adobe||
@@ -800,8 +1295,12 @@ summary.adobeTracking||
 
 setSummaryValue(
 "adobeResult",
-normalizeValidationResult(adobeValue),
-getResultClass(adobeValue)
+normalizeValidationResult(
+adobeValue
+),
+getResultClass(
+adobeValue
+)
 );
 
 let ctaValue=
@@ -837,7 +1336,10 @@ if(passed===total){
 
 ctaValue="PASS";
 
-}else if(passed>0&&failed>0){
+}else if(
+passed>0&&
+failed>0
+){
 
 ctaValue="PARTIALLY PASS";
 
@@ -853,18 +1355,26 @@ if(ctaValue){
 
 setSummaryValue(
 "ctaResult",
-normalizeValidationResult(ctaValue),
-getResultClass(ctaValue)
+normalizeValidationResult(
+ctaValue
+),
+getResultClass(
+ctaValue
+)
 );
 
 }
 
 }
 
-function normalizeValidationResult(value){
+function normalizeValidationResult(
+value
+){
 
 const normalized=
-String(value||"")
+String(
+value||""
+)
 .trim()
 .toUpperCase();
 
@@ -873,7 +1383,9 @@ normalized==="PARTIAL"||
 normalized==="PARTIALLY"||
 normalized==="PARTIALLY PASSED"
 ){
+
 return"PARTIALLY PASS";
+
 }
 
 if(
@@ -881,7 +1393,9 @@ normalized==="PASS"||
 normalized==="PASSED"||
 normalized==="YES"
 ){
+
 return"PASS";
+
 }
 
 if(
@@ -889,17 +1403,23 @@ normalized==="FAIL"||
 normalized==="FAILED"||
 normalized==="NO"
 ){
+
 return"FAIL";
+
 }
 
 return value||"-";
 
 }
 
-function getResultClass(value){
+function getResultClass(
+value
+){
 
 const normalized=
-String(value||"")
+String(
+value||""
+)
 .trim()
 .toUpperCase();
 
@@ -908,7 +1428,9 @@ normalized==="PASS"||
 normalized==="PASSED"||
 normalized==="YES"
 ){
+
 return"pass";
+
 }
 
 if(
@@ -917,7 +1439,9 @@ normalized==="PARTIALLY"||
 normalized==="PARTIALLY PASS"||
 normalized==="PARTIALLY PASSED"
 ){
+
 return"partial";
+
 }
 
 if(
@@ -925,94 +1449,187 @@ normalized==="FAIL"||
 normalized==="FAILED"||
 normalized==="NO"
 ){
+
 return"fail";
+
 }
 
 if(
 normalized==="RUNNING"
 ){
+
 return"running";
+
 }
 
 return"";
 
 }
 
-function setSummaryValue(id,value,className){
+function setSummaryValue(
+id,
+value,
+className
+){
 
-const element=document.getElementById(id);
+const element=
+document.getElementById(id);
 
-if(!element)return;
+if(!element){
+return;
+}
 
-element.textContent=value||"-";
+element.textContent=
+value||"-";
 
-element.className="summary-value";
+element.className=
+"summary-value";
 
 if(className){
-element.classList.add(className);
-}
+
+element.classList.add(
+className
+);
 
 }
 
-function showReportLink(reportPath){
+}
 
-if(!reportPath)return;
+function showReportLink(
+reportPath
+){
 
-const link=document.getElementById("reportLink");
+if(!reportPath){
+return;
+}
 
-link.href=reportPath;
+const link=
+document.getElementById(
+"reportLink"
+);
 
-reportSection.classList.remove("hidden");
+link.href=
+reportPath;
+
+reportSection.classList.remove(
+"hidden"
+);
 
 }
 
-function updatePageTracker(pages,currentPage){
+function updatePageTracker(
+pages,
+currentPage,
+currentAction,
+currentCta
+){
 
-const body=document.getElementById("pageTableBody");
+const body=
+document.getElementById(
+"pageTableBody"
+);
 
-const rows=Array.isArray(pages)
+const rows=
+Array.isArray(pages)
 ?pages
 :[];
 
-if(!rows.length&&!currentPage){
+if(currentPage){
+
+if(
+typeof currentPage==="string"
+){
+
+document.getElementById(
+"currentPageValue"
+).textContent=
+currentPage;
+
+}else{
+
+if(currentPage.url){
+
+document.getElementById(
+"currentPageValue"
+).textContent=
+`${currentPage.step||"Running"} - ${currentPage.url}`;
+
+}else{
+
+document.getElementById(
+"currentPageValue"
+).textContent=
+currentPage.step||
+"Running";
+
+}
+
+document.getElementById(
+"currentActionValue"
+).textContent=
+currentPage.action||
+currentAction||
+"-";
+
+document.getElementById(
+"currentCtaValue"
+).textContent=
+currentPage.cta||
+currentCta||
+"-";
+
+}
+
+}else{
+
+document.getElementById(
+"currentPageValue"
+).textContent=
+"-";
+
+document.getElementById(
+"currentActionValue"
+).textContent=
+currentAction||
+"-";
+
+document.getElementById(
+"currentCtaValue"
+).textContent=
+currentCta||
+"-";
+
+}
+
+if(!rows.length){
 
 body.innerHTML=
-'<tr><td colspan="4">Waiting for page data...</td></tr>';
-
-document.getElementById("currentPageValue").textContent="-";
-document.getElementById("currentActionValue").textContent="-";
-document.getElementById("currentCtaValue").textContent="-";
+`
+<tr>
+<td colspan="4">
+${
+currentPage
+?"Journey running..."
+:"Waiting for page data..."
+}
+</td>
+</tr>
+`;
 
 return;
 
 }
 
-if(currentPage){
-
-if(currentPage.url){
-
-document.getElementById("currentPageValue").textContent=
-`${currentPage.step||"Running"} - ${currentPage.url}`;
-
-}else{
-
-document.getElementById("currentPageValue").textContent=
-currentPage.step||"Running";
-
-}
-
-document.getElementById("currentActionValue").textContent=
-currentPage.action||"-";
-
-document.getElementById("currentCtaValue").textContent=
-currentPage.cta||"-";
-
-}
-
-body.innerHTML=rows.map((page,index)=>{
+body.innerHTML=
+rows
+.map(
+function(page,index){
 
 const status=
-String(page.status||"").toUpperCase();
+String(
+page.status||""
+)
+.toUpperCase();
 
 const css=
 status==="FAIL"
@@ -1024,19 +1641,50 @@ status==="FAIL"
 return`
 <tr>
 <td>${index+1}</td>
-<td>${escapeHtml(page.url||"")}</td>
-<td>${escapeHtml(page.pageName||"")}</td>
-<td class="page-status ${css}">
-${escapeHtml(status||"Running...")}
-</td>
-</tr>`;
 
-}).join("");
+<td>
+${escapeHtml(
+page.url||
+page.pageUrl||
+""
+)}
+</td>
+
+<td>
+${escapeHtml(
+page.pageName||
+""
+)}
+</td>
+
+<td class="page-status ${css}">
+${escapeHtml(
+status||
+"Running..."
+)}
+</td>
+
+</tr>
+`;
+
+}
+)
+.join("");
 
 if(
 currentPage&&
+typeof currentPage==="object"&&
 currentPage.url&&
-!rows.some(page=>page.url===currentPage.url)
+!rows.some(
+function(page){
+
+return(
+page.url||
+page.pageUrl
+)===currentPage.url;
+
+}
+)
 ){
 
 body.insertAdjacentHTML(
@@ -1044,11 +1692,19 @@ body.insertAdjacentHTML(
 `
 <tr>
 <td>${rows.length+1}</td>
-<td>${escapeHtml(currentPage.url)}</td>
+
+<td>
+${escapeHtml(
+currentPage.url
+)}
+</td>
+
 <td>-</td>
+
 <td class="page-status running">
 Running...
 </td>
+
 </tr>
 `
 );
@@ -1057,29 +1713,57 @@ Running...
 
 }
 
-function escapeHtml(value){
+function escapeHtml(
+value
+){
 
-return String(value??"")
-.replace(/&/g,"&amp;")
-.replace(/</g,"&lt;")
-.replace(/>/g,"&gt;")
-.replace(/"/g,"&quot;")
-.replace(/'/g,"&#039;");
+return String(
+value??""
+)
+.replace(
+/&/g,
+"&amp;"
+)
+.replace(
+/</g,
+"&lt;"
+)
+.replace(
+/>/g,
+"&gt;"
+)
+.replace(
+/"/g,
+"&quot;"
+)
+.replace(
+/'/g,
+"&#039;"
+);
 
 }
 
-function updateStatus(status){
+function updateStatus(
+status
+){
 
 const statusElement=
-document.getElementById("jobStatus");
+document.getElementById(
+"jobStatus"
+);
 
 const normalizedStatus=
-String(status||"NOT_STARTED").toUpperCase();
+String(
+status||
+"NOT_STARTED"
+)
+.toUpperCase();
 
 statusElement.textContent=
 normalizedStatus;
 
-statusElement.className="status";
+statusElement.className=
+"status";
 
 const classMap={
 "NOT_STARTED":"status-idle",
@@ -1091,42 +1775,86 @@ ERROR:"status-failed"
 };
 
 statusElement.classList.add(
-classMap[normalizedStatus]||"status-idle"
+classMap[
+normalizedStatus
+]||"status-idle"
 );
 
 }
 
-function showMessage(message,type){
+function showMessage(
+message,
+type
+){
 
 const element=
-document.getElementById("jobMessage");
+document.getElementById(
+"jobMessage"
+);
 
-element.textContent=message;
+element.textContent=
+message||"";
 
-element.className="message "+type;
+element.className=
+"message "+
+(type||"error");
 
 }
 
-function formatDate(value){
+function hideMessage(){
 
-if(!value)return"-";
+const element=
+document.getElementById(
+"jobMessage"
+);
 
-const date=new Date(value);
+element.textContent="";
 
-if(Number.isNaN(date.getTime())){
+element.className=
+"message";
+
+}
+
+function formatDate(
+value
+){
+
+if(!value){
+return"-";
+}
+
+const date=
+new Date(value);
+
+if(
+Number.isNaN(
+date.getTime()
+)
+){
+
 return value;
+
 }
 
 return date.toLocaleString();
 
 }
 
-function formatTime(value){
+function formatTime(
+value
+){
 
-const date=new Date(value);
+const date=
+new Date(value);
 
-if(Number.isNaN(date.getTime())){
+if(
+Number.isNaN(
+date.getTime()
+)
+){
+
 return value;
+
 }
 
 return date.toLocaleTimeString();
@@ -1135,20 +1863,30 @@ return date.toLocaleTimeString();
 
 function getTime(){
 
-return new Date().toLocaleTimeString();
+return new Date()
+.toLocaleTimeString();
 
 }
 
-function calculateDuration(startedAt,finishedAt){
+function calculateDuration(
+startedAt,
+finishedAt
+){
 
 if(!startedAt){
 return"00:00";
 }
 
-const start=new Date(startedAt).getTime();
+const start=
+new Date(
+startedAt
+).getTime();
 
-const end=finishedAt
-?new Date(finishedAt).getTime()
+const end=
+finishedAt
+?new Date(
+finishedAt
+).getTime()
 :Date.now();
 
 if(
@@ -1156,14 +1894,20 @@ Number.isNaN(start)||
 Number.isNaN(end)||
 end<start
 ){
+
 return"00:00";
+
 }
 
 const totalSeconds=
-Math.floor((end-start)/1000);
+Math.floor(
+(end-start)/1000
+);
 
 const minutes=
-Math.floor(totalSeconds/60);
+Math.floor(
+totalSeconds/60
+);
 
 const seconds=
 totalSeconds%60;
@@ -1177,15 +1921,26 @@ async function loadLatestReport(){
 try{
 
 const response=
-await fetch("/api/reports/latest");
+await fetch(
+"/api/reports/latest",
+{
+cache:"no-store"
+}
+);
 
-if(!response.ok)return;
+if(!response.ok){
+return;
+}
 
 const data=
 await response.json();
 
 if(data.path){
-showReportLink(data.path);
+
+showReportLink(
+data.path
+);
+
 }
 
 }catch(_){}

@@ -3,71 +3,59 @@ const {
     By,
     Key,
     until
-} = require("selenium-webdriver");
-const chrome = require("selenium-webdriver/chrome");
+} = require("selenium-webdriver"), chrome = require("selenium-webdriver/chrome");
+
 class PreSalesJourneyValidator {
-    constructor(options = {}) {
-        this.credentials = options.credentials || {};
-        this.config = options.journeyConfig || {};
-        const environments = this.config.environments || {};
-        const entered = String(options.startUrl || process.env.PRESALES_START_URL || "").trim();
-        let base = "";
-        if (entered) {
-            try {
-                base = new URL(entered).origin;
-            } catch (_) {
-                base = entered.replace(/\/+$/, "");
-            }
+    constructor(t = {}) {
+        this.credentials = t.credentials || {};
+        this.config = t.journeyConfig || {};
+        const e = this.config.environments || {},
+            i = String(t.startUrl || process.env.PRESALES_START_URL || "").trim();
+        let r = "";
+        if (i) try {
+            r = new URL(i).origin
+        } catch (t) {
+            r = i.replace(/\/+$/, "")
         } else {
-            const env = String(options.environment || process.env.PRESALES_ENV || "").toLowerCase();
-            if (env && environments[env]) base = String(environments[env]).replace(/\/+$/, "");
+            const i = String(t.environment || process.env.PRESALES_ENV || "").toLowerCase();
+            i && e[i] && (r = String(e[i]).replace(/\/+$/, ""))
         }
-        if (!base) throw new Error("Pre-Sales Website URL is required. Enter TST1, TST, or HFD URL.");
-        const normalizedBase = base.replace(/\/+$/, "");
-        const matched = Object.entries(environments).find(([, value]) => normalizedBase.toLowerCase() === String(value).replace(/\/+$/, "").toLowerCase());
-        this.environment = matched ? matched[0] : "custom";
-        this.baseUrl = normalizedBase;
-        this.startUrl = `${normalizedBase}/personal/login`;
-        this.homeUrlPrefix = `${normalizedBase}/personal/store/mobile-plans`;
-        this.deviceListingPrefix = `${normalizedBase}/personal/store/mobile/devices`;
-        this.productPdpPrefix = `${normalizedBase}/personal/store/mobile/devices/apple/iphone-17-pro-max`;
-        this.intentPrefix = `${normalizedBase}/personal/store/intent-selection`;
-        this.starPlanPrefix = `${normalizedBase}/personal/store/product-starplan`;
-        this.simPrefix = `${normalizedBase}/personal/store/sim-selection`;
-        this.suggestionPrefix = `${normalizedBase}/personal/store/product-suggestion-SN-UD`;
-        this.watchPrefix = `${normalizedBase}/personal/store/mobile/tablets-watches/apple/watch-s11-46mm-al`;
-        this.reviewOrderPrefix = `${normalizedBase}/personal/revieworder`;
-        this.mobileNumberPrefix = `${normalizedBase}/personal/checkout/your-mobile-number`;
-        this.reviewDetailPrefix = `${normalizedBase}/personal/checkout/reviewdetail`;
-        this.threeDsPrefix = `${normalizedBase}/TorpedoPayment/ThreeDSLoadingPageForWeb`;
-        this.successPrefix = `${normalizedBase}/personal/checkout-success`;
-        this.startUrl = this.startUrl;
-        this.homeUrlPrefix = this.homeUrlPrefix;
-        this.deviceListingPrefix = this.deviceListingPrefix;
-        this.productPdpPrefix = this.productPdpPrefix;
-        this.intentPrefix = this.intentPrefix;
-        this.starPlanPrefix = this.starPlanPrefix;
-        this.simPrefix = this.simPrefix;
-        this.suggestionPrefix = this.suggestionPrefix;
-        this.watchPrefix = this.watchPrefix;
-        this.reviewOrderPrefix = this.reviewOrderPrefix;
-        this.mobileNumberPrefix = this.mobileNumberPrefix;
-        this.reviewDetailPrefix = this.reviewDetailPrefix;
-        this.threeDsPrefix = this.threeDsPrefix;
-        this.successPrefix = this.successPrefix;
-        this.timeout = options.timeout || 90000;
-        this.maxAdobeWait = options.maxAdobeWait || 60000;
-        this.networkQuietTime = options.networkQuietTime || 4000;
-        this.pollInterval = options.pollInterval || 250;
+        if (!r) throw new Error("Pre-Sales Website URL is required. Enter TST1, TST, or HFD URL.");
+        const a = r.replace(/\/+$/, ""),
+            s = Object.entries(e).find(([, t]) => a.toLowerCase() === String(t).replace(/\/+$/, "").toLowerCase());
+        this.environment = s ? s[0] : "custom";
+        this.baseUrl = a;
+        this.startUrl = `${a}/personal/login`;
+        this.homeUrlPrefix = `${a}/personal/store/mobile-plans`;
+        this.deviceListingPrefix = `${a}/personal/store/mobile/devices`;
+        this.productPdpPrefix = `${a}/personal/store/mobile/devices/apple/iphone-17-pro-max`;
+        this.intentPrefix = `${a}/personal/store/intent-selection`;
+        this.starPlanPrefix = `${a}/personal/store/product-starplan`;
+        this.simPrefix = `${a}/personal/store/sim-selection`;
+        this.suggestionPrefix = `${a}/personal/store/product-suggestion-SN-UD`;
+        this.watchPrefix = `${a}/personal/store/mobile/tablets-watches/apple/watch-s11-46mm-al`;
+        this.reviewOrderPrefix = `${a}/personal/revieworder`;
+        this.mobileNumberPrefix = `${a}/personal/checkout/your-mobile-number`;
+        this.reviewDetailPrefix = `${a}/personal/checkout/reviewdetail`;
+        this.threeDsPrefix = `${a}/TorpedoPayment/ThreeDSLoadingPageForWeb`;
+        this.successPrefix = `${a}/personal/checkout-success`;
+        this.timeout = t.timeout || 9e4;
+        this.maxAdobeWait = t.maxAdobeWait || 6e4;
+        this.networkQuietTime = t.networkQuietTime || 4e3;
+        this.pollInterval = t.pollInterval || 250;
         this.driver = null;
         this.currentPageUrl = "";
         this.currentStep = "";
         this.currentAction = "";
         this.currentCTA = "";
-        this.paymentOptionPrompt = options.paymentOptionPrompt || null;
-        this.payLaterPeriod = options.payLaterPeriod || null;
-        this.simType = options.simType || null;
+        this.currentCta = "";
+        this.paymentOptionPrompt = t.paymentOptionPrompt || null;
+        this.payLaterPeriod = t.payLaterPeriod || null;
+        this.simType = t.simType || null;
         this.lastRecordedPageName = "";
+        this.seenHitKeys = new Set;
+        this.logger = t.logger || null;
+        this.onProgress = "function" === typeof t.onProgress ? t.onProgress : null;
         this.result = {
             startedAt: new Date().toISOString(),
             finishedAt: null,
@@ -105,1182 +93,1056 @@ class PreSalesJourneyValidator {
             currentCTA: "",
             currentUrl: ""
         };
-        this.seenHitKeys = new Set();
-        console.log(`Selected Pre-Sales Environment: ${this.environment.toUpperCase()}`);
-        console.log(`Selected Pre-Sales Website URL: ${this.baseUrl}`);
-        console.log(`Journey start URL: ${this.startUrl}`);
+        this.log(`Selected Pre-Sales Environment: ${this.environment.toUpperCase()}`);
+        this.log(`Selected Pre-Sales Website URL: ${this.baseUrl}`);
+        this.log(`Journey start URL: ${this.startUrl}`);
     }
-    async createDriver() {
-        if (this.driver) return this.driver;
-        const options = new chrome.Options();
-        options.addArguments("--headless=new", "--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu", "--window-size=1920,1080", "--disable-popup-blocking", "--disable-notifications", "--disable-background-networking", "--disable-background-timer-throttling", "--disable-renderer-backgrounding", "--disable-features=TranslateUI");
-        options.setLoggingPrefs({
-            performance: "ALL",
-            browser: "ALL"
-        });
-        this.driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
-        return this.driver;
+    log(...t) {
+        const e = t.map(t => "string" === typeof t ? t : JSON.stringify(t)).join(" ");
+        console.log(e);
+        if (this.logger) try {
+            this.logger(e)
+        } catch (t) {}
+        if (this.onProgress) try {
+            this.onProgress()
+        } catch (t) {}
     }
+    progress() {
+        if (this.onProgress) try {
+            this.onProgress()
+        } catch (t) {}
+    }
+    
+    async createDriver(){
+const options=new chrome.Options();
+const headless="true"===String(process.env.SELENIUM_HEADLESS||"").toLowerCase()||"true"===String(process.env.RENDER||"").toLowerCase();
+if(headless)options.addArguments("--headless=new");
+options.addArguments("--start-maximized");
+options.addArguments("--disable-notifications");
+options.addArguments("--disable-popup-blocking");
+options.addArguments("--disable-dev-shm-usage");
+options.addArguments("--no-sandbox");
+options.addArguments("--proxy-server=direct://");
+options.addArguments("--proxy-bypass-list=*");
+this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();
+this.log(`Chrome mode: ${headless?"HEADLESS":"VISIBLE"}`);
+return this.driver;
+}
+    
     async close() {
-        if (!this.driver) return;
-        try {
-            await this.driver.quit();
-        } catch (_) {}
-        this.driver = null;
+        if (this.driver) {
+            try {
+                await this.driver.quit()
+            } catch (t) {}
+            this.driver = null
+        }
     }
-    async sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    async sleep(t) {
+        return new Promise(e => setTimeout(e, t))
     }
     async drainPerformanceLogs() {
         try {
-            return await this.driver.manage().logs().get("performance");
-        } catch (_) {
-            return [];
+            return await this.driver.manage().logs().get("performance")
+        } catch (t) {
+            return []
         }
     }
-    parsePerformanceLog(log) {
+    parsePerformanceLog(t) {
         try {
-            const parsed = JSON.parse(log.message);
-            return parsed.message || parsed;
-        } catch (_) {
-            return null;
+            const e = JSON.parse(t.message);
+            return e.message || e
+        } catch (t) {
+            return null
         }
     }
-    parseParameterPairs(text) {
-        const entries = [];
-        if (!text) return entries;
-        let value = String(text);
+    parseParameterPairs(t) {
+        const e = [];
+        if (!t) return e;
+        let i = String(t);
         try {
-            if (/^https?:/i.test(value)) {
-                const u = new URL(value);
-                for (const [key, val] of u.searchParams.entries()) entries.push([key, val]);
+            if (/^https?:/i.test(i)) {
+                const t = new URL(i);
+                for (const [i, r] of t.searchParams.entries()) e.push([i, r])
             } else {
-                value = value.replace(/^\?/, "");
-                const params = new URLSearchParams(value);
-                for (const [key, val] of params.entries()) entries.push([key, val]);
+                i = i.replace(/^\?/, "");
+                const t = new URLSearchParams(i);
+                for (const [i, r] of t.entries()) e.push([i, r])
             }
-        } catch (_) {}
-        return entries;
+        } catch (t) {}
+        return e;
     }
-    parseHit(url, postData = "", requestId = "") {
-        const entries = [...this.parseParameterPairs(url), ...this.parseParameterPairs(postData)];
-        const params = {};
-        for (const [key, value] of entries) {
-            params[key] = value;
-        }
-        let reportSuite = "";
-        let pathName = "";
+    parseHit(t, e = "", i = "") {
+        const r = [...this.parseParameterPairs(t), ...this.parseParameterPairs(e)],
+            a = {};
+        for (const [t, e] of r) a[t] = e;
+        let s = "",
+            n = "";
         try {
-            const u = new URL(url);
-            pathName = u.pathname;
-            const parts = u.pathname.split("/");
-            const b = parts.findIndex(x => x.toLowerCase() === "b");
-            if (b >= 0 && parts[b + 1] && parts[b + 1].toLowerCase() === "ss" && parts[b + 2]) {
-                reportSuite = parts[b + 2];
-            }
-        } catch (_) {}
-        const eventObjects = [];
-        for (const [key, value] of entries) {
-            if (key.toLowerCase() === "events") {
-                for (const token of String(value).split(",")) {
-                    const t = token.trim();
-                    if (!t) continue;
-                    const parts = t.split(":");
-                    eventObjects.push({
-                        name: parts[0].trim(),
-                        value: parts.slice(1).join(":").trim()
-                    });
+            const e = new URL(t);
+            n = e.pathname;
+            const i = e.pathname.split("/"),
+                r = i.findIndex(t => "b" === t.toLowerCase());
+            r >= 0 && i[r + 1] && "ss" === i[r + 1].toLowerCase() && i[r + 2] && (s = i[r + 2]);
+        } catch (t) {}
+        const o = [];
+        for (const [t, e] of r) {
+            if ("events" === t.toLowerCase())
+                for (const t of String(e).split(",")) {
+                    const e = t.trim();
+                    if (!e) continue;
+                    const i = e.split(":");
+                    o.push({
+                        name: i[0].trim(),
+                        value: i.slice(1).join(":").trim()
+                    })
                 }
-            }
-            if (/^event\d+$/i.test(key)) {
-                eventObjects.push({
-                    name: key,
-                    value: value || "1"
-                });
-            }
+            if (/^event\d+$/i.test(t)) o.push({
+                name: t,
+                value: e || "1"
+            });
         }
-        const eVars = {};
-        const props = {};
-        for (const [key, value] of entries) {
-            if (/^v\d+$/i.test(key) || /^evar\d+$/i.test(key)) eVars[key.toLowerCase()] = value;
-            if (/^c\d+$/i.test(key) || /^prop\d+$/i.test(key)) props[key.toLowerCase()] = value;
+        const c = {},
+            l = {};
+        for (const [t, e] of r) {
+            if (/^v\d+$/i.test(t) || /^evar\d+$/i.test(t)) c[t.toLowerCase()] = e;
+            if (/^c\d+$/i.test(t) || /^prop\d+$/i.test(t)) l[t.toLowerCase()] = e;
         }
-        const products = params.products || "";
-        const pageName = params.pageName || params.gn || params.v1 || "";
-        const orderId = params.purchaseID || params.purchaseId || params.transactionID || params.orderId || params.oid || "";
-        const revenue = params.purchaseamount || params.purchaseAmount || params.revenue || params.amount || "";
         return {
             timestamp: new Date().toISOString(),
-            requestId: requestId || "",
-            url,
-            pathName,
-            reportSuite,
-            pageName,
-            events: eventObjects.map(x => x.name),
-            eventDetails: eventObjects,
-            eVars,
-            props,
-            products,
-            orderId,
-            revenue,
-            rawQuery: params,
-            postData: postData || ""
+            requestId: i || "",
+            url: t,
+            pathName: n,
+            reportSuite: s,
+            pageName: a.pageName || a.gn || a.v1 || "",
+            events: o.map(t => t.name),
+            eventDetails: o,
+            eVars: c,
+            props: l,
+            products: a.products || "",
+            orderId: a.purchaseID || a.purchaseId || a.transactionID || a.orderId || a.oid || "",
+            revenue: a.purchaseamount || a.purchaseAmount || a.revenue || a.amount || "",
+            rawQuery: a,
+            postData: e || ""
         };
     }
     async collectAdobeHits() {
-        const hits = [];
-        const logs = await this.drainPerformanceLogs();
-        for (const log of logs) {
-            const msg = this.parsePerformanceLog(log);
-            if (!msg || msg.method !== "Network.requestWillBeSent") continue;
-            const request = msg.params && msg.params.request;
-            if (!request || !request.url || !/\/b\/ss\//i.test(request.url)) continue;
-            const hit = this.parseHit(request.url, request.postData || "", msg.params.requestId || "");
-            const key = `${hit.requestId}|${hit.url}|${hit.postData}`;
-            if (this.seenHitKeys.has(key)) continue;
-            this.seenHitKeys.add(key);
-            hits.push(hit);
-        }
-        return hits;
-    }
-    async captureAdobeWindow(label, options = {}) {
-        const timeout = options.timeout || (options.isPageLoad ? this.maxAdobeWait : Math.min(this.maxAdobeWait, 20000));
-        const quietTime = options.quietTime || this.networkQuietTime;
-        const start = Date.now();
-        let lastHitAt = null;
-        const hits = [];
-        while (Date.now() - start < timeout) {
-            const batch = await this.collectAdobeHits();
-            if (batch.length) {
-                hits.push(...batch);
-                lastHitAt = Date.now();
+        const t = [],
+            e = await this.drainPerformanceLogs();
+        for (const i of e) {
+            const e = this.parsePerformanceLog(i);
+            if (!e || "Network.requestWillBeSent" !== e.method) continue;
+            const r = e.params && e.params.request;
+            if (!r || !r.url || !/\/b\/ss\//i.test(r.url)) continue;
+            const a = this.parseHit(r.url, r.postData || "", e.params.requestId || ""),
+                s = `${a.requestId}|${a.url}|${a.postData}`;
+            if (!this.seenHitKeys.has(s)) {
+                this.seenHitKeys.add(s);
+                t.push(a)
             }
-            if (hits.length && lastHitAt && Date.now() - lastHitAt >= quietTime) break;
+        }
+        return t;
+    }
+    async captureAdobeWindow(t, e = {}) {
+        const i = e.timeout || (e.isPageLoad ? this.maxAdobeWait : Math.min(this.maxAdobeWait, 2e4)),
+            r = e.quietTime || this.networkQuietTime,
+            a = Date.now();
+        let s = null;
+        const n = [];
+        for (; Date.now() - a < i;) {
+            const t = await this.collectAdobeHits();
+            if (t.length) {
+                n.push(...t);
+                s = Date.now()
+            }
+            if (n.length && s && Date.now() - s >= r) break;
             await this.sleep(this.pollInterval);
         }
-        if (hits.length) {
-            this.addHitData(hits);
-        }
-        return hits;
+        if (n.length) this.addHitData(n);
+        return n;
     }
-    async waitForElement(locator, timeout = 60000) {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
+    async waitForElement(t, e = 6e4) {
+        const i = Date.now();
+        for (; Date.now() - i < e;) {
             try {
-                const elements = await this.driver.findElements(locator);
-                for (const element of elements) {
-                    if (await element.isDisplayed() && await element.isEnabled()) return element;
-                }
-            } catch (_) {}
+                const e = await this.driver.findElements(t);
+                for (const t of e)
+                    if (await t.isDisplayed() && await t.isEnabled()) return t;
+            } catch (t) {}
             await this.sleep(300);
         }
-        throw new Error(`Element not found within ${timeout}ms: ${JSON.stringify(locator)}`);
+        throw new Error(`Element not found within ${e}ms: ${JSON.stringify(t)}`);
     }
-    async visibleElements(locator) {
-        const elements = await this.driver.findElements(locator);
-        const visible = [];
-        for (const element of elements) {
-            try {
-                if (await element.isDisplayed() && await element.isEnabled()) visible.push(element);
-            } catch (_) {}
-        }
-        return visible;
+    async visibleElements(t) {
+        const e = await this.driver.findElements(t),
+            i = [];
+        for (const t of e) try {
+            if (await t.isDisplayed() && await t.isEnabled()) i.push(t)
+        } catch (t) {}
+        return i;
     }
-    async textOf(element) {
+    async textOf(t) {
         try {
-            return (await element.getText()).replace(/\s+/g, " ").trim();
-        } catch (_) {
-            return "";
+            return (await t.getText()).replace(/\s+/g, " ").trim()
+        } catch (t) {
+            return ""
         }
     }
-    async clickElement(element, label) {
-        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", element);
+    async clickElement(t, e) {
+        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", t);
         await this.sleep(400);
         try {
-            await element.click();
-        } catch (_) {
-            await this.driver.executeScript("arguments[0].click();", element);
+            await t.click()
+        } catch (i) {
+            await this.driver.executeScript("arguments[0].click();", t)
         }
-        console.log(`    Payment selection clicked: ${label}`);
+        this.log(`     Payment selection clicked: ${e}`);
     }
-    async clickText(text, options = {}) {
-        const exact = options.exact !== false;
-        const escaped = JSON.stringify(String(text));
-        const xpath = exact ? `//*[self::a or self::button or @role='button' or self::label][normalize-space(.)=${escaped}]` : `//*[self::a or self::button or @role='button' or self::label][contains(normalize-space(.),${escaped})]`;
-        const elements = await this.visibleElements(By.xpath(xpath));
-        if (!elements.length) return null;
-        await this.clickElement(elements[0], text);
-        return elements[0];
+    async clickText(t, e = {}) {
+        const i = !1 !== e.exact,
+            r = JSON.stringify(String(t)),
+            a = i ? `//*[self::a or self::button or @role='button' or self::label][normalize-space(.)=${r}]` : `//*[self::a or self::button or @role='button' or self::label][contains(normalize-space(.),${r})]`,
+            s = await this.visibleElements(By.xpath(a));
+        return s.length ? (await this.clickElement(s[0], t), s[0]) : null;
     }
-    async waitForUrlPrefix(prefix, timeout = 60000) {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
-            const url = await this.driver.getCurrentUrl();
-            if (url.toLowerCase().startsWith(prefix.toLowerCase())) return url;
+    async waitForUrlPrefix(t, e = 6e4) {
+        const i = Date.now();
+        for (; Date.now() - i < e;) {
+            const e = await this.driver.getCurrentUrl();
+            if (e.toLowerCase().startsWith(t.toLowerCase())) return e;
             await this.sleep(400);
         }
-        throw new Error(`Timed out waiting for URL prefix: ${prefix}\nCurrent URL: ${await this.driver.getCurrentUrl()}`);
+        throw new Error(`Timed out waiting for URL prefix: ${t}\nCurrent URL: ${await this.driver.getCurrentUrl()}`);
     }
-    async waitForPageReady(timeout = 60000) {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
+    async waitForPageReady(t = 6e4) {
+        const e = Date.now();
+        for (; Date.now() - e < t;) {
             try {
-                const state = await this.driver.executeScript("return document.readyState");
-                if (state === "complete" || state === "interactive") return;
-            } catch (_) {}
+                const t = await this.driver.executeScript("return document.readyState");
+                if ("complete" === t || "interactive" === t) return
+            } catch (t) {}
             await this.sleep(250);
         }
-    }
-    async getPageName() {
-        try {
-            return await this.driver.executeScript(` try { const layers = [window.adobeDataLayer, window.dataLayer]; for (const layer of layers) { if (!Array.isArray(layer)) continue; for (let i = layer.length - 1; i >= 0; i--) { const x = layer[i]; if (x && x.pageName) return x.pageName; if (x && x.page && x.page.pageName) return x.page.pageName; } } } catch(e) {} return ""; `);
-        } catch (_) {
-            return "";
-        }
-    }
-    async waitForPageName(previousPageName = "", timeout = 5000) {
-        const start = Date.now();
-        let last = "";
-        while (Date.now() - start < timeout) {
-            const value = String(await this.getPageName()).trim();
-            if (value) {
-                last = value;
-                if (!previousPageName || value !== previousPageName) return value;
-            }
-            await this.sleep(250);
-        }
-        return last;
-    }
-    async recordPage(name, expectedPrefix = "") {
-        this.currentStep = name;
-        this.currentAction = "";
-        this.currentCTA = "";
-        await this.waitForPageReady();
-        const url = await this.driver.getCurrentUrl();
-        const title = await this.driver.getTitle().catch(() => "");
-        this.currentPageUrl = url;
-        this.result.currentPage = {
-            name,
-            url,
-            action: "",
-            cta: ""
-        };
-        this.result.currentPageUrl = url;
-        this.result.currentStep = name;
-        this.result.currentAction = "";
-        this.result.currentCTA = "";
-        this.result.currentUrl = url;
-        const previousPageName = this.lastRecordedPageName || "";
-        const dataLayerPageName = await this.waitForPageName(previousPageName, 3500);
-        const hits = await this.captureAdobeWindow(`${name} pageLoad`, {
-            isPageLoad: true
-        });
-        const hitPageName = [...hits].reverse().map(hit => String(hit && hit.pageName ? hit.pageName : "").trim()).find(Boolean) || [...this.result.hits].slice(-10).reverse().map(hit => String(hit && hit.pageName ? hit.pageName : "").trim()).find(Boolean) || "";
-        let pageName = "";
-        if (dataLayerPageName && (!previousPageName || dataLayerPageName !== previousPageName)) pageName = dataLayerPageName;
-        else if (hitPageName) pageName = hitPageName;
-        else if (dataLayerPageName) pageName = dataLayerPageName;
-        this.lastRecordedPageName = pageName || previousPageName || "";
-        const allPageHits = hits.length > 0 ? hits : (hitPageName ? this.result.hits.slice(-10).filter(hit => String(hit && hit.pageName ? hit.pageName : "").trim() === hitPageName) : []);
-        const events = [...new Set(allPageHits.flatMap(hit => Array.isArray(hit.events) ? hit.events : []))];
-        const page = {
-            step: name,
-            url,
-            expectedPrefix,
-            title,
-            pageName,
-            pageLoadCaptured: hits.length > 0 || !!hitPageName,
-            adobeHitCount: hits.length > 0 ? hits.length : allPageHits.length,
-            eventsFound: events,
-            status: hits.length > 0 || !!pageName ? "PASS" : "FAIL",
-            hits: allPageHits
-        };
-        this.result.pages.push(page);
-        return page;
-    }
-    recordAction(action, label, value, hits, pageUrl) {
-        this.currentAction = action;
-        this.currentCTA = action === "CTA" ? label : "";
-        this.currentPageUrl = pageUrl || this.currentPageUrl;
-        this.result.currentPage = {
-            name: this.currentStep,
-            url: this.currentPageUrl,
-            action: this.currentAction,
-            cta: this.currentCTA
-        };
-        this.result.currentPageUrl = this.currentPageUrl;
-        this.result.currentStep = this.currentStep;
-        this.result.currentAction = this.currentAction;
-        this.result.currentCTA = this.currentCTA;
-        this.result.currentUrl = this.currentPageUrl;
-        const eventNames = [...new Set(hits.flatMap(h => h.events))];
-        const actionRecord = {
-            action,
-            label,
-            value: value || "",
-            pageUrl,
-            timestamp: new Date().toISOString(),
-            adobeHitCount: hits.length,
-            events: eventNames,
-            hits
-        };
-        this.result.actions.push(actionRecord);
-        return actionRecord;
-    }
-    addHitData(hits) {
-        for (const hit of hits) {
-            this.result.hits.push(hit);
-            for (const event of hit.eventDetails || []) {
-                this.result.ecommerceEvents.push({
-                    event: event.name,
-                    value: event.value,
-                    pageName: hit.pageName,
-                    pageUrl: this.currentPageUrl || hit.url,
-                    timestamp: hit.timestamp,
-                    products: hit.products,
-                    orderId: hit.orderId,
-                    revenue: hit.revenue,
-                    hitUrl: hit.url
-                });
-            }
-            if (hit.products) {
-                this.result.products.push({
-                    pageUrl: this.currentPageUrl || hit.url,
-                    pageName: hit.pageName,
-                    products: hit.products,
-                    events: hit.events,
-                    eVars: hit.eVars,
-                    props: hit.props,
-                    timestamp: hit.timestamp
-                });
-            }
-            if (hit.orderId || hit.revenue || hit.events.some(e => /purchase|order.?success/i.test(e))) {
-                this.result.orders.push({
-                    pageUrl: this.currentPageUrl || hit.url,
-                    pageName: hit.pageName,
-                    orderId: hit.orderId,
-                    revenue: hit.revenue,
-                    products: hit.products,
-                    events: hit.events,
-                    eVars: hit.eVars,
-                    props: hit.props,
-                    timestamp: hit.timestamp
-                });
-            }
-        }
-    }
-    async navigateAndRecord(name, prefix, url) {
-        this.currentStep = name;
-        this.currentAction = "";
-        this.currentCTA = "";
-        this.currentPageUrl = url;
-        this.result.currentPage = {
-            name,
-            url,
-            action: "",
-            cta: ""
-        };
-        this.result.currentPageUrl = url;
-        this.result.currentStep = name;
-        this.result.currentAction = "";
-        this.result.currentCTA = "";
-        this.result.currentUrl = url;
-        await this.drainPerformanceLogs();
-        await this.driver.get(url);
-        await this.waitForUrlPrefix(prefix);
-        this.currentPageUrl = await this.driver.getCurrentUrl();
-        this.result.currentPage.url = this.currentPageUrl;
-        this.result.currentPageUrl = this.currentPageUrl;
-        this.result.currentUrl = this.currentPageUrl;
-        return this.recordPage(name, prefix);
-    }
-    async clickAndRecord(name, clickFn, targetPrefix = "", actionLabel = "") {
-        this.currentAction = "CTA";
-        this.currentCTA = actionLabel || name;
-        this.result.currentPage = {
-            name: this.currentStep,
-            url: this.currentPageUrl,
-            action: this.currentAction,
-            cta: this.currentCTA
-        };
-        this.result.currentPageUrl = this.currentPageUrl;
-        this.result.currentStep = this.currentStep;
-        this.result.currentAction = this.currentAction;
-        this.result.currentCTA = this.currentCTA;
-        this.result.currentUrl = this.currentPageUrl;
-        await this.drainPerformanceLogs();
-        await clickFn();
-        const hits = await this.captureAdobeWindow(name);
-        if (targetPrefix) await this.waitForUrlPrefix(targetPrefix);
-        this.currentPageUrl = await this.driver.getCurrentUrl();
-        this.result.currentPage.url = this.currentPageUrl;
-        this.result.currentPageUrl = this.currentPageUrl;
-        this.result.currentUrl = this.currentPageUrl;
-        this.recordAction("CTA", actionLabel || name, "", hits, this.currentPageUrl);
-        return hits;
     }
     
-    async login(){
-console.log("\n[1] Login");
-await this.drainPerformanceLogs();
-
-const hubId=String(this.credentials.hubId||"").trim();
-const hubPassword=String(this.credentials.hubPassword||"");
-
-console.log(`    Hub ID provided: ${hubId?"YES":"NO"}`);
-console.log(`    Hub Password provided: ${hubPassword?"YES":"NO"}`);
-console.log(`    Login URL: ${this.startUrl}`);
-
-if(!hubId)throw new Error("Hub ID was not provided to the Pre-Sales validator.");
-if(!hubPassword)throw new Error("Hub password was not provided to the Pre-Sales validator. Please configure HUB_PASSWORD in the server environment.");
-
-const loadLoginPage=async()=>{
-await this.drainPerformanceLogs();
-console.log(`    Navigating to login page: ${this.startUrl}`);
-await this.driver.get(this.startUrl);
-await this.waitForPageReady(30000);
-await this.sleep(2000);
-
-const url=await this.driver.getCurrentUrl();
-const title=await this.driver.getTitle().catch(()=>"");
-
-console.log(`    Login page final URL: ${url}`);
-console.log(`    Login page title: ${title||"N/A"}`);
-
-return{url,title};
+   async getPageName(){
+return await this.driver.executeScript(`
+(function(){
+try{
+var dl=window.dataLayerSH;
+if(!dl){
+return {pageName:"",event:"",length:0,error:"dataLayerSH not found"};
+}
+if(!Array.isArray(dl)){
+return {pageName:"",event:"",length:0,error:"dataLayerSH is not an array"};
+}
+for(var i=dl.length-1;i>=0;i--){
+var x=dl[i];
+if(x&&x.event==="pageViewed"&&x.page&&x.page.pageName){
+return {
+pageName:String(x.page.pageName).trim(),
+event:String(x.event),
+length:dl.length,
+error:""
 };
-
-let page=await loadLoginPage();
-
-if(/\/_error\.html/i.test(page.url)){
-console.log("    WARNING: TST site redirected Selenium to /_error.html.");
-console.log("    Retrying login page once...");
-await this.sleep(3000);
-page=await loadLoginPage();
 }
-
-if(/\/_error\.html/i.test(page.url)){
-let bodyText="";
-try{
-bodyText=await this.driver.findElement(By.css("body")).getText();
-}catch(e){}
-
-let html="";
-try{
-html=await this.driver.getPageSource();
-}catch(e){}
-
-console.log(`    ERROR PAGE BODY: ${String(bodyText||"").replace(/\s+/g," ").slice(0,1000)}`);
-console.log(`    ERROR PAGE HTML LENGTH: ${html.length}`);
-
-this.result.authentication={
-status:"FAILED",
-account:"Test Account",
-reason:"Environment redirected to /_error.html before login fields were available",
-url:page.url,
-title:page.title,
-hubIdProvided:!!hubId,
-hubPasswordProvided:!!hubPassword,
-errorPageText:String(bodyText||"").replace(/\s+/g," ").slice(0,1000)
+}
+for(var j=dl.length-1;j>=0;j--){
+var y=dl[j];
+if(y&&y.page&&y.page.pageName){
+return {
+pageName:String(y.page.pageName).trim(),
+event:String(y.event||""),
+length:dl.length,
+error:""
 };
-
-throw new Error(`Login page redirected to /_error.html. URL: ${page.url}. Title: ${page.title||"N/A"}`);
-}
-
-const findLoginElement=async(selectors,timeout=30000)=>{
-const start=Date.now();
-
-while(Date.now()-start<timeout){
-try{
-for(const selector of selectors){
-const elements=await this.driver.findElements(By.css(selector));
-
-for(const element of elements){
-try{
-if(await element.isDisplayed()&&await element.isEnabled())return element;
-}catch(e){}
 }
 }
-}catch(e){}
-
-try{
-const frames=await this.driver.findElements(By.css("iframe"));
-
-for(const frame of frames){
-try{
-await this.driver.switchTo().defaultContent();
-await this.driver.switchTo().frame(frame);
-
-for(const selector of selectors){
-const elements=await this.driver.findElements(By.css(selector));
-
-for(const element of elements){
-try{
-if(await element.isDisplayed()&&await element.isEnabled())return element;
-}catch(e){}
-}
-}
-
-await this.driver.switchTo().defaultContent();
+return {pageName:"",event:"",length:dl.length,error:"pageName not found"};
 }catch(e){
-try{
-await this.driver.switchTo().defaultContent();
-}catch(e){}
+return {pageName:"",event:"",length:0,error:String(e&&e.message||e)};
 }
-}
-}catch(e){}
-
-await this.sleep(500);
+})()
+`);
 }
 
-return null;
+    async waitForPageName(t = "", e = 5e3) {
+        const i = Date.now();
+        let r = "";
+        for (; Date.now() - i < e;) {
+            const e = String(await this.getPageName()).trim();
+            if (e && (r = e, !t || e !== t)) return e;
+            await this.sleep(250);
+        }
+        return r;
+    }
+    
+    async recordPage(t,e=""){
+this.currentStep=t;
+this.currentAction="";
+this.currentCTA="";
+this.currentCta="";
+this.progress();
+await this.waitForPageReady();
+const i=await this.driver.getCurrentUrl(),r=await this.driver.getTitle().catch(()=> "");
+this.currentPageUrl=i;
+this.result.currentPage={name:t,url:i,action:"",cta:""};
+this.result.currentPageUrl=i;
+this.result.currentStep=t;
+this.result.currentAction="";
+this.result.currentCTA="";
+this.result.currentUrl=i;
+
+let c="";
+for(let a=0;a<14&&!c;a++){
+c=String(await this.getPageName().catch(()=> "")||"").trim();
+if(!c)await this.sleep(250);
+}
+
+const n=await this.captureAdobeWindow(`${t} pageLoad`,{isPageLoad:true});
+const o=[...n].reverse().map(t=>String(t&&t.pageName?t.pageName:"").trim()).find(Boolean)||[...this.result.hits].slice(-10).reverse().map(t=>String(t&&t.pageName?t.pageName:"").trim()).find(Boolean)||"";
+if(!c)c=o;
+this.lastRecordedPageName=c||"";
+
+const l=n.length?n:o?this.result.hits.slice(-10).filter(t=>String(t&&t.pageName?t.pageName:"").trim()===o):[];
+const h=[...new Set(l.flatMap(t=>Array.isArray(t.events)?t.events:[]))];
+const d={
+step:t,
+url:i,
+expectedPrefix:e,
+title:r,
+pageName:c||null,
+pageLoadCaptured:n.length>0||!!o,
+adobeHitCount:n.length>0?n.length:l.length,
+eventsFound:h,
+status:n.length>0||!!c?"PASS":"FAIL",
+hits:l
 };
 
-const username=await findLoginElement([
-"input[type='email']",
-"input[name*='email' i]",
-"input[id*='email' i]",
-"input[name*='user' i]",
-"input[id*='user' i]",
-"input[autocomplete='username']",
-"input[type='text']"
-]);
-
-const password=await findLoginElement([
-"input[type='password']",
-"input[autocomplete='current-password']"
-]);
-
-try{
-await this.driver.switchTo().defaultContent();
-}catch(e){}
-
-const finalUrl=await this.driver.getCurrentUrl();
-const finalTitle=await this.driver.getTitle().catch(()=>"");
-
-console.log(`    Login form URL: ${finalUrl}`);
-console.log(`    Login form title: ${finalTitle||"N/A"}`);
-console.log(`    Username field: ${username?"FOUND":"NOT FOUND"}`);
-console.log(`    Password field: ${password?"FOUND":"NOT FOUND"}`);
-
-if(/\/_error\.html/i.test(finalUrl)){
-this.result.authentication={
-status:"FAILED",
-account:"Test Account",
-reason:"Environment redirected to /_error.html while locating login fields",
-url:finalUrl,
-title:finalTitle
-};
-throw new Error(`Login fields unavailable because environment redirected to /_error.html: ${finalUrl}`);
+this.result.pages.push(d);
+this.progress();
+return d;
 }
 
-if(!username||!password){
-let bodyText="";
-try{
-bodyText=await this.driver.findElement(By.css("body")).getText();
-}catch(e){}
-
-this.result.authentication={
-status:"FAILED",
-account:"Test Account",
-reason:"Login fields not found",
-url:finalUrl,
-title:finalTitle,
-usernameFound:!!username,
-passwordFound:!!password,
-bodyText:String(bodyText||"").replace(/\s+/g," ").slice(0,1000)
-};
-
-throw new Error(`Login fields not found. Username: ${username?"FOUND":"NOT FOUND"}, Password: ${password?"FOUND":"NOT FOUND"}, URL: ${finalUrl}`);
-}
-
-console.log("    Entering Hub ID...");
-await username.clear();
-await username.sendKeys(hubId);
-
-console.log("    Entering Hub password...");
-await password.clear();
-await password.sendKeys(hubPassword);
-
-const loginButtons=await this.visibleElements(
-By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']")
-);
-
-if(loginButtons.length){
-await this.drainPerformanceLogs();
-await this.clickElement(loginButtons[0],"Login");
-const hits=await this.captureAdobeWindow("Login CTA");
-this.recordAction("CTA","Login","",hits,await this.driver.getCurrentUrl());
-}else{
-await this.drainPerformanceLogs();
-await password.sendKeys(Key.ENTER);
-const hits=await this.captureAdobeWindow("Login CTA");
-this.recordAction("CTA","Login","",hits,await this.driver.getCurrentUrl());
-}
-
-await this.sleep(1500);
-
-const postLoginUrl=await this.driver.getCurrentUrl();
-console.log(`    Post-login URL: ${postLoginUrl}`);
-
-if(/\/_error\.html/i.test(postLoginUrl)){
-let bodyText="";
-try{
-bodyText=await this.driver.findElement(By.css("body")).getText();
-}catch(e){}
-
-this.result.authentication={
-status:"FAILED",
-account:"Test Account",
-reason:"Environment redirected to /_error.html after login",
-url:postLoginUrl,
-title:await this.driver.getTitle().catch(()=>""),
-errorPageText:String(bodyText||"").replace(/\s+/g," ").slice(0,1000)
-};
-
-throw new Error(`Login redirected to /_error.html after credentials were submitted: ${postLoginUrl}`);
-}
-
-await this.waitForUrlPrefix(this.homeUrlPrefix,90000);
-
-this.currentPageUrl=await this.driver.getCurrentUrl();
-
-console.log("    Login successful. Landed on: "+this.currentPageUrl);
-
-this.result.authentication={
-status:"SUCCESS",
-account:"Test Account",
+    recordAction(t,e,i,r,a){
+this.currentAction=t||"";
+this.currentCTA=e||"";
+this.currentCta=this.currentCTA;
+this.currentPageUrl=a||this.currentPageUrl;
+this.result.currentPage={
+name:this.currentStep,
 url:this.currentPageUrl,
-hubIdProvided:true,
-hubPasswordProvided:true
+action:this.currentAction,
+cta:this.currentCTA
 };
+this.result.currentPageUrl=this.currentPageUrl;
+this.result.currentStep=this.currentStep;
+this.result.currentAction=this.currentAction;
+this.result.currentCTA=this.currentCTA;
+this.result.currentUrl=this.currentPageUrl;
+const s=[...new Set(r.flatMap(t=>t.events||[]))],
+n={
+action:this.currentAction,
+label:this.currentCTA,
+value:i||"",
+pageUrl:a||this.currentPageUrl,
+timestamp:new Date().toISOString(),
+adobeHitCount:r.length,
+events:s,
+hits:r
+};
+this.result.actions.push(n);
+this.progress();
+return n;
 }
-
+    addHitData(t) {
+        for (const e of t) {
+            this.result.hits.push(e);
+            for (const t of e.eventDetails || []) this.result.ecommerceEvents.push({
+                event: t.name,
+                value: t.value,
+                pageName: e.pageName,
+                pageUrl: this.currentPageUrl || e.url,
+                timestamp: e.timestamp,
+                products: e.products,
+                orderId: e.orderId,
+                revenue: e.revenue,
+                hitUrl: e.url
+            });
+            if (e.products) this.result.products.push({
+                pageUrl: this.currentPageUrl || e.url,
+                pageName: e.pageName,
+                products: e.products,
+                events: e.events,
+                eVars: e.eVars,
+                props: e.props,
+                timestamp: e.timestamp
+            });
+            if (e.orderId || e.revenue || e.events.some(t => /purchase|order.?success/i.test(t))) this.result.orders.push({
+                pageUrl: this.currentPageUrl || e.url,
+                pageName: e.pageName,
+                orderId: e.orderId,
+                revenue: e.revenue,
+                products: e.products,
+                events: e.events,
+                eVars: e.eVars,
+                props: e.props,
+                timestamp: e.timestamp
+            });
+        }
+        this.progress();
+    }
+    async navigateAndRecord(t, e, i) {
+        this.currentStep = t;
+        this.currentAction = "";
+        this.currentCTA = "";
+        this.currentCta = "";
+        this.currentPageUrl = i;
+        this.progress();
+        this.result.currentPage = {
+            name: t,
+            url: i,
+            action: "",
+            cta: ""
+        };
+        this.result.currentPageUrl = i;
+        this.result.currentStep = t;
+        this.result.currentAction = "";
+        this.result.currentCTA = "";
+        this.result.currentUrl = i;
+        await this.drainPerformanceLogs();
+        await this.driver.get(i);
+        await this.waitForUrlPrefix(e);
+        this.currentPageUrl = await this.driver.getCurrentUrl();
+        this.result.currentPage.url = this.currentPageUrl;
+        this.result.currentPageUrl = this.currentPageUrl;
+        this.result.currentUrl = this.currentPageUrl;
+        return this.recordPage(t, e);
+    }
+    async clickAndRecord(t, e, i = "", r = "") {
+        this.currentAction = "CTA";
+        this.currentCTA = r || t;
+        this.currentCta = this.currentCTA;
+        this.result.currentPage = {
+            name: this.currentStep,
+            url: this.currentPageUrl,
+            action: this.currentAction,
+            cta: this.currentCTA
+        };
+        this.result.currentPageUrl = this.currentPageUrl;
+        this.result.currentStep = this.currentStep;
+        this.result.currentAction = this.currentAction;
+        this.result.currentCTA = this.currentCTA;
+        this.result.currentUrl = this.currentPageUrl;
+        this.progress();
+        await this.drainPerformanceLogs();
+        await e();
+        const a = await this.captureAdobeWindow(t);
+        if (i) await this.waitForUrlPrefix(i);
+        this.currentPageUrl = await this.driver.getCurrentUrl();
+        this.result.currentPage.url = this.currentPageUrl;
+        this.result.currentPageUrl = this.currentPageUrl;
+        this.result.currentUrl = this.currentPageUrl;
+        return this.recordAction("CTA", r || t, "", a, this.currentPageUrl), a;
+    }
+    async login() {
+        this.log("\n[1] Login");
+        await this.drainPerformanceLogs();
+        const t = String(this.credentials.hubId || "").trim(),
+            e = String(this.credentials.hubPassword || "");
+        if (!t) throw new Error("Hub ID was not provided to the Pre-Sales validator.");
+        if (!e) throw new Error("Hub password was not provided to the Pre-Sales validator. Please configure HUB_PASSWORD in the server environment.");
+        this.log(`    Hub ID provided: ${t?"YES":"NO"}`);
+        this.log(`    Hub Password provided: ${e?"YES":"NO"}`);
+        this.log(`    Login URL: ${this.startUrl}`);
+        const i = async () => {
+            await this.drainPerformanceLogs();
+            this.log(`    Navigating to login page: ${this.startUrl}`);
+            await this.driver.get(this.startUrl);
+            await this.waitForPageReady(3e4);
+            await this.sleep(2e3);
+            const t = await this.driver.getCurrentUrl(),
+                e = await this.driver.getTitle().catch(() => "");
+            this.log(`    Login page final URL: ${t}`);
+            this.log(`    Login page title: ${e||"N/A"}`);
+            return {
+                url: t,
+                title: e
+            };
+        };
+        let r = await i();
+        if (/_error\.html/i.test(r.url)) {
+            this.log("    WARNING: TST site redirected Selenium to /_error.html.");
+            await this.sleep(3e3);
+            r = await i()
+        }
+        if (/_error\.html/i.test(r.url)) {
+            let i = "",
+                a = "";
+            try {
+                i = await this.driver.findElement(By.css("body")).getText()
+            } catch (t) {}
+            try {
+                a = await this.driver.getPageSource()
+            } catch (t) {}
+            this.result.authentication = {
+                status: "FAILED",
+                account: "Test Account",
+                reason: "Environment redirected to /_error.html before login fields were available",
+                url: r.url,
+                title: r.title,
+                hubIdProvided: !!t,
+                hubPasswordProvided: !!e,
+                errorPageText: String(i || "").replace(/\s+/g, " ").slice(0, 1e3)
+            };
+            throw new Error(`Login page redirected to /_error.html. URL: ${r.url}. Title: ${r.title||"N/A"}`);
+        }
+        const a = async (t, e = 3e4) => {
+            const i = Date.now();
+            for (; Date.now() - i < e;) {
+                try {
+                    for (const e of t) {
+                        const t = await this.driver.findElements(By.css(e));
+                        for (const e of t) try {
+                            if (await e.isDisplayed() && await e.isEnabled()) return e
+                        } catch (t) {}
+                    }
+                } catch (t) {}
+                try {
+                    const e = await this.driver.findElements(By.css("iframe"));
+                    for (const i of e) try {
+                        await this.driver.switchTo().defaultContent();
+                        await this.driver.switchTo().frame(i);
+                        for (const e of t) {
+                            const t = await this.driver.findElements(By.css(e));
+                            for (const e of t) try {
+                                if (await e.isDisplayed() && await e.isEnabled()) return e
+                            } catch (t) {}
+                        }
+                        await this.driver.switchTo().defaultContent();
+                    } catch (t) {
+                        try {
+                            await this.driver.switchTo().defaultContent()
+                        } catch (t) {}
+                    }
+                } catch (t) {}
+                await this.sleep(500);
+            }
+            return null;
+        };
+        const s = await a(["input[type='email']", "input[name*='email' i]", "input[id*='email' i]", "input[name*='user' i]", "input[id*='user' i]", "input[autocomplete='username']", "input[type='text']"]),
+            n = await a(["input[type='password']", "input[autocomplete='current-password']"]);
+        try {
+            await this.driver.switchTo().defaultContent()
+        } catch (t) {}
+        const o = await this.driver.getCurrentUrl(),
+            c = await this.driver.getTitle().catch(() => "");
+        this.log(`    Login form URL: ${o}`);
+        this.log(`    Login form title: ${c||"N/A"}`);
+        this.log(`    Username field: ${s?"FOUND":"NOT FOUND"}`);
+        this.log(`    Password field: ${n?"FOUND":"NOT FOUND"}`);
+        if (/_error\.html/i.test(o)) throw new Error(`Login fields unavailable because environment redirected to /_error.html: ${o}`);
+        if (!s || !n) {
+            let t = "";
+            try {
+                t = await this.driver.findElement(By.css("body")).getText()
+            } catch (t) {}
+            throw new Error(`Login fields not found. Username: ${s?"FOUND":"NOT FOUND"}, Password: ${n?"FOUND":"NOT FOUND"}, URL: ${o}. Body: ${String(t||"").replace(/\s+/g," ").slice(0,1000)}`);
+        }
+        this.log("    Entering Hub ID...");
+        await s.clear();
+        await s.sendKeys(t);
+        this.log("    Entering Hub password...");
+        await n.clear();
+        await n.sendKeys(e);
+        const l = await this.visibleElements(By.xpath("//button[normalize-space(.)='Login' or .//*[normalize-space(.)='Login']] | //input[@type='submit']"));
+        await this.drainPerformanceLogs();
+        if (l.length) await this.clickElement(l[0], "Login");
+        else await n.sendKeys(Key.ENTER);
+        const h = await this.captureAdobeWindow("Login CTA");
+        this.recordAction("CTA", "Login", "", h, await this.driver.getCurrentUrl());
+        await this.sleep(1500);
+        const d = await this.driver.getCurrentUrl();
+        this.log(`    Post-login URL: ${d}`);
+        if (/_error\.html/i.test(d)) throw new Error(`Login redirected to _error.html after credentials were submitted: ${d}`);
+        await this.waitForUrlPrefix(this.homeUrlPrefix, 9e4);
+        this.currentPageUrl = await this.driver.getCurrentUrl();
+        this.log("    Login successful. Landed on: " + this.currentPageUrl);
+        this.result.authentication = {
+            status: "SUCCESS",
+            account: "Test Account",
+            url: this.currentPageUrl,
+            hubIdProvided: true,
+            hubPasswordProvided: true
+        };
+    }
     async stepHome() {
-        console.log("\n[2] Mobile Plans / Landing");
+        this.log("\n[2] Mobile Plans / Landing");
         await this.recordPage("Mobile Plans / Landing", this.homeUrlPrefix);
-        const cta = await this.visibleElements(By.xpath("//*[self::a or self::button or @role='button'][contains(normalize-space(.),'See more devices')]")).then(x => x[0]);
-        if (!cta) throw new Error("CTA 'See more devices' was not found.");
-        await this.clickAndRecord("See More Devices CTA", () => this.clickElement(cta, "See more devices"), this.deviceListingPrefix, "See more devices");
+        const t = (await this.visibleElements(By.xpath("//*[self::a or self::button or @role='button'][contains(normalize-space(.),'See more devices')]")))[0];
+        if (!t) throw new Error("CTA 'See more devices' was not found.");
+        await this.clickAndRecord("See More Devices CTA", () => this.clickElement(t, "See more devices"), this.deviceListingPrefix, "See more devices");
         await this.waitForUrlPrefix(this.deviceListingPrefix);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Mobile Device Listing", this.deviceListingPrefix);
     }
     async isCurrentProductOutOfStock() {
         try {
-            const state = await this.driver.executeScript(() => {
-                const visible = el => {
-                    if (!el) return false;
-                    const style = window.getComputedStyle(el);
-                    const rect = el.getBoundingClientRect();
-                    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
-                };
-                const selectors = ["[data-container]", "button", "label", "span", "div", "p"];
-                const negativePattern = /(?:out\s*of\s*stock|sold\s*out|currently\s*unavailable|not\s*available|unavailable|no\s*stock)/i;
-                const positivePattern = /(?:add\s*to\s*(?:cart|basket)|buy\s*now|available\s*now)/i;
-                const matches = [];
-                for (const selector of selectors) {
-                    for (const el of Array.from(document.querySelectorAll(selector))) {
-                        if (!visible(el)) continue;
-                        const text = String(el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
-                        if (!text || text.length > 180) continue;
-                        if (negativePattern.test(text)) matches.push(text);
+            const t = await this.driver.executeScript(() => {
+                const t = t => {
+                        if (!t) return false;
+                        const e = window.getComputedStyle(t),
+                            i = t.getBoundingClientRect();
+                        return "none" !== e.display && "hidden" !== e.visibility && i.width > 0 && i.height > 0
+                    },
+                    e = ["[data-container]", "button", "label", "span", "div", "p"],
+                    i = /(?:out\s*of\s*stock|sold\s*out|currently\s*unavailable|not\s*available|unavailable|no\s*stock)/i,
+                    r = /(?:add\s*to\s*(?:cart|basket)|buy\s*now|available\s*now)/i,
+                    a = [];
+                for (const r of e)
+                    for (const e of Array.from(document.querySelectorAll(r))) {
+                        if (!t(e)) continue;
+                        const r = String(e.innerText || e.textContent || "").replace(/\s+/g, " ").trim();
+                        !r || r.length > 180 || i.test(r) && a.push(r)
                     }
-                }
-                const addToCart = Array.from(document.querySelectorAll("button,a,[role='button']")).some(el => visible(el) && positivePattern.test(String(el.innerText || el.textContent || "")));
+                const s = Array.from(document.querySelectorAll("button,a,[role='button']")).some(e => t(e) && r.test(String(e.innerText || e.textContent || "")));
                 return {
-                    negativeMatches: [...new Set(matches)].slice(0, 20),
-                    addToCart
-                };
+                    negativeMatches: [...new Set(a)].slice(0, 20),
+                    addToCart: s
+                }
             });
-            if (state.addToCart) return false;
-            return state.negativeMatches.length > 0;
-        } catch (_) {
-            return false;
+            return !t.addToCart && t.negativeMatches.length > 0;
+        } catch (t) {
+            return false
         }
     }
-    async findIphone17ProMaxCards(timeout = 90000) {
-        const start = Date.now();
-        let lastCount = 0;
-        while (Date.now() - start < timeout) {
+    async findIphone17ProMaxCards(t = 9e4) {
+        const e = Date.now();
+        let i = 0;
+        for (; Date.now() - e < t;) {
             try {
-                await this.driver.executeScript("window.scrollTo(0, document.body.scrollHeight);");
+                await this.driver.executeScript("window.scrollTo(0,document.body.scrollHeight);");
                 await this.sleep(1200);
-                await this.driver.executeScript("window.scrollTo(0, 0);");
-            } catch (_) {}
-            const cards = await this.driver.executeScript(() => {
-                const normalize = value => String(value || "").replace(/\s+/g, " ").trim();
-                const result = [];
-                const nodes = Array.from(document.querySelectorAll(".product-item-card"));
-                nodes.forEach((card, index) => {
-                    const text = normalize(card.innerText || card.textContent || "");
-                    const modelNode = card.querySelector(".content-section .f-h6, .content-section span.f-h6");
-                    const model = normalize(modelNode ? modelNode.innerText || modelNode.textContent : "");
-                    const image = card.querySelector("img");
-                    const imageSrc = normalize(image ? image.getAttribute("src") : "");
-                    const combined = `${model} ${text} ${imageSrc}`.toLowerCase();
-                    if (!combined.includes("iphone 17")) return;
-                    const proMax = combined.includes("iphone 17 pro max") || combined.includes("iphone-17-pro-max");
-                    if (!proMax) return;
-                    result.push({
-                        index,
-                        model: model || "iPhone 17 Pro Max",
-                        text: text.slice(0, 300),
-                        imageSrc,
-                        hasContentClickTarget: !!card.querySelector(".content-section > div[style*='cursor'], .image-section > div[style*='cursor']")
-                    });
-                });
-                return result;
+                await this.driver.executeScript("window.scrollTo(0,0);")
+            } catch (t) {}
+            const t = await this.driver.executeScript(() => {
+                const t = t => String(t || "").replace(/\s+/g, " ").trim(),
+                    e = [];
+                return Array.from(document.querySelectorAll(".product-item-card")).forEach((i, r) => {
+                    const a = t(i.innerText || i.textContent || ""),
+                        s = i.querySelector(".content-section .f-h6,.content-section span.f-h6"),
+                        n = t(s ? s.innerText || s.textContent : ""),
+                        o = i.querySelector("img"),
+                        c = t(o ? o.getAttribute("src") : ""),
+                        l = `${n} ${a} ${c}`.toLowerCase();
+                    l.includes("iphone 17") && (l.includes("iphone 17 pro max") || l.includes("iphone-17-pro-max")) && e.push({
+                        index: r,
+                        model: n || "iPhone 17 Pro Max",
+                        text: a.slice(0, 300),
+                        imageSrc: c,
+                        hasContentClickTarget: !!i.querySelector(".content-section > div[style*='cursor'],.image-section > div[style*='cursor']")
+                    })
+                }), e
             }).catch(() => []);
-            lastCount = cards.length;
-            if (cards.length) return cards;
+            if (i = t.length, t.length) return t;
             await this.sleep(1800);
         }
         return [];
     }
     async chooseDevice() {
-        console.log("\n[3] Mobile Device Listing -> Random iPhone 17 Pro Max");
-        const maxAttempts = 8;
-        const attemptedModels = new Set();
-        let lastError = "";
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            console.log(`    Device selection attempt ${attempt}/${maxAttempts}`);
-            await this.waitForPageReady(90000);
-            if (!this.deviceListingPrefix || !(await this.driver.getCurrentUrl()).toLowerCase().startsWith(this.deviceListingPrefix.toLowerCase())) {
+        this.log("\n[3] Mobile Device Listing -> Random iPhone 17 Pro Max");
+        const t = new Set;
+        let e = "";
+        for (let i = 1; i <= 8; i++) {
+            this.log(`    Device selection attempt ${i}/8`);
+            await this.waitForPageReady(9e4);
+            if (!this.deviceListingPrefix || (await this.driver.getCurrentUrl()).toLowerCase().startsWith(this.deviceListingPrefix.toLowerCase())) {} else {
                 await this.driver.get(this.deviceListingPrefix);
-                await this.waitForUrlPrefix(this.deviceListingPrefix, 90000);
-                await this.recordPage("Mobile Device Listing - Retry", this.deviceListingPrefix);
+                await this.waitForUrlPrefix(this.deviceListingPrefix, 9e4);
+                await this.recordPage("Mobile Device Listing - Retry", this.deviceListingPrefix)
             }
-            const cards = await this.findIphone17ProMaxCards(90000);
-            if (!cards.length) {
-                throw new Error("No iPhone 17 Pro Max product cards were found on the device listing page. " + "The PLP uses .product-item-card cards, but no matching iPhone 17 Pro Max card was rendered.");
-            }
-            let availablePool = cards.filter(card => !attemptedModels.has(card.model));
-            if (!availablePool.length) availablePool = cards;
-            const selected = availablePool[Math.floor(Math.random() * availablePool.length)];
-            attemptedModels.add(selected.model);
-            console.log(`    Found ${cards.length} iPhone 17 Pro Max card(s).`);
-            console.log(`    Selected device: ${selected.model}`);
-            if (selected.imageSrc) console.log(`    Device image: ${selected.imageSrc}`);
+            const r = await this.findIphone17ProMaxCards(9e4);
+            if (!r.length) throw new Error("No iPhone 17 Pro Max product cards were found on the device listing page.");
+            let a = r.filter(e => !t.has(e.model));
+            a.length || (a = r);
+            const s = a[Math.floor(Math.random() * a.length)];
+            t.add(s.model);
+            this.log(`    Found ${r.length} iPhone 17 Pro Max card(s).`);
+            this.log(`    Selected device: ${s.model}`);
+            if (s.imageSrc) this.log(`    Device image: ${s.imageSrc}`);
             this.result.selections.push({
                 type: "Device Attempt",
-                value: selected.model,
-                url: selected.imageSrc || "",
-                attempt
+                value: s.model,
+                url: s.imageSrc || "",
+                attempt: i
             });
             await this.drainPerformanceLogs();
-            const clicked = await this.driver.executeScript((cardIndex) => {
-                const cards = Array.from(document.querySelectorAll(".product-item-card"));
-                const card = cards[cardIndex];
-                if (!card) return false;
-                const candidates = [card.querySelector(".content-section > div[style*='cursor']"), card.querySelector(".image-section > div[style*='cursor']"), card.querySelector(".content-section"), card.querySelector(".image-section")].filter(Boolean);
-                const target = candidates[0];
-                if (!target) return false;
-                target.scrollIntoView({
+            const n = await this.driver.executeScript(t => {
+                const e = Array.from(document.querySelectorAll(".product-item-card"))[t];
+                if (!e) return false;
+                const i = [e.querySelector(".content-section > div[style*='cursor']"), e.querySelector(".image-section > div[style*='cursor']"), e.querySelector(".content-section"), e.querySelector(".image-section")].filter(Boolean)[0];
+                return !!i && (i.scrollIntoView({
                     behavior: "instant",
                     block: "center"
-                });
-                target.dispatchEvent(new MouseEvent("click", {
+                }), i.dispatchEvent(new MouseEvent("click", {
                     bubbles: true,
                     cancelable: true,
                     view: window
-                }));
-                return true;
-            }, selected.index).catch(() => false);
-            if (!clicked) {
-                lastError = `iPhone 17 Pro Max card '${selected.model}' was detected but could not be clicked.`;
-                console.log(`    ${lastError}`);
-                continue;
+                })), true)
+            }, s.index).catch(() => false);
+            if (!n) {
+                e = `iPhone 17 Pro Max card '${s.model}' was detected but could not be clicked.`;
+                this.log(`    ${e}`);
+                continue
             }
-            console.log("    CTA clicked: iPhone 17 Pro Max product card");
-            const clickHits = await this.captureAdobeWindow("iPhone 17 Pro Max prodClick", {
-                timeout: Math.min(this.maxAdobeWait, 30000),
+            this.log("    CTA clicked: iPhone 17 Pro Max product card");
+            const o = await this.captureAdobeWindow("iPhone 17 Pro Max prodClick", {
+                timeout: Math.min(this.maxAdobeWait, 3e4),
                 quietTime: Math.min(this.networkQuietTime, 2500)
             });
-            this.recordAction("PRODUCT_CLICK", "iPhone 17 Pro Max", selected.model, clickHits, await this.driver.getCurrentUrl());
+            this.recordAction("PRODUCT_CLICK", "iPhone 17 Pro Max", s.model, o, await this.driver.getCurrentUrl());
             try {
-                await this.waitForUrlPrefix(this.productPdpPrefix, 90000);
-            } catch (navigationError) {
-                lastError = navigationError.message || String(navigationError);
-                console.log(`    Navigation did not reach the expected iPhone 17 Pro Max PDP.`);
-                console.log(`    Current URL: ${await this.driver.getCurrentUrl()}`);
+                await this.waitForUrlPrefix(this.productPdpPrefix, 9e4)
+            } catch (t) {
+                e = t.message || String(t);
+                this.log("    Navigation did not reach the expected iPhone 17 Pro Max PDP.");
                 await this.driver.get(this.deviceListingPrefix);
-                await this.waitForUrlPrefix(this.deviceListingPrefix, 90000);
-                continue;
+                await this.waitForUrlPrefix(this.deviceListingPrefix, 9e4);
+                continue
             }
             this.currentPageUrl = await this.driver.getCurrentUrl();
-            const pdpPage = await this.recordPage("iPhone 17 Pro Max PDP", this.productPdpPrefix);
-            const outOfStock = await this.isCurrentProductOutOfStock();
-            if (outOfStock) {
-                console.log(`    OUT OF STOCK: ${selected.model}`);
+            const c = await this.recordPage("iPhone 17 Pro Max PDP", this.productPdpPrefix);
+            if (!await this.isCurrentProductOutOfStock()) {
+                this.log(`    IN STOCK: ${s.model}`);
                 this.result.selections.push({
                     type: "Device Availability",
-                    value: `${selected.model} - OUT OF STOCK`,
+                    value: `${s.model} - IN STOCK`,
                     url: this.currentPageUrl,
-                    attempt
+                    attempt: i
                 });
-                this.result.actions.push({
-                    action: "DEVICE_RETRY",
-                    label: "Out of stock - return to PLP",
-                    value: selected.model,
-                    pageUrl: this.currentPageUrl,
-                    timestamp: new Date().toISOString(),
-                    adobeHitCount: pdpPage.adobeHitCount,
-                    events: pdpPage.eventsFound || [],
-                    hits: pdpPage.hits || []
-                });
-                await this.driver.get(this.deviceListingPrefix);
-                await this.waitForUrlPrefix(this.deviceListingPrefix, 90000);
-                await this.waitForPageReady(90000);
-                continue;
+                return
             }
-            console.log(`    IN STOCK: ${selected.model}`);
-            console.log(`    PDP URL: ${this.currentPageUrl}`);
+            this.log(`    OUT OF STOCK: ${s.model}`);
             this.result.selections.push({
                 type: "Device Availability",
-                value: `${selected.model} - IN STOCK`,
+                value: `${s.model} - OUT OF STOCK`,
                 url: this.currentPageUrl,
-                attempt
+                attempt: i
             });
-            return;
+            this.result.actions.push({
+                action: "DEVICE_RETRY",
+                label: "Out of stock - return to PLP",
+                value: s.model,
+                pageUrl: this.currentPageUrl,
+                timestamp: new Date().toISOString(),
+                adobeHitCount: c.adobeHitCount,
+                events: c.eventsFound || [],
+                hits: c.hits || []
+            });
+            await this.driver.get(this.deviceListingPrefix);
+            await this.waitForUrlPrefix(this.deviceListingPrefix, 9e4);
         }
-        throw new Error(lastError || `Could not find an in-stock iPhone 17 Pro Max after ${maxAttempts} attempts.`);
+        throw new Error(e || "Could not find an in-stock iPhone 17 Pro Max after 8 attempts.");
     }
     async choosePdpOptions() {
-        console.log("\n[4] iPhone 17 Pro Max PDP");
-        const radioGroups = await this.getRadioGroups();
-        let colorGroup = radioGroups.find(g => /color|colour/i.test(g.key));
-        let sizeGroup = radioGroups.find(g => /storage|size|capacity|gb/i.test(g.key) && g !== colorGroup);
-        const usedGroups = new Set();
-        if (colorGroup) {
-            await this.selectRadioFromGroup(colorGroup, "Color");
-            usedGroups.add(colorGroup.key);
+        this.log("\n[4] iPhone 17 Pro Max PDP");
+        const t = await this.getRadioGroups();
+        let e = t.find(t => /color|colour/i.test(t.key)),
+            i = t.find(t => /storage|size|capacity|gb/i.test(t.key) && t !== e);
+        const r = new Set;
+        if (e && (await this.selectRadioFromGroup(e, "Color"), r.add(e.key)), i && !r.has(i.key) && (await this.selectRadioFromGroup(i, "Size/Storage"), r.add(i.key)), !e || !i) {
+            const a = t.filter(t => !r.has(t.key) && !/payment|pay|monthly/i.test(t.key));
+            !e && a.length && (e = a.shift(), await this.selectRadioFromGroup(e, "Color/Variant"), r.add(e.key));
+            !i && a.length && (i = a.shift(), await this.selectRadioFromGroup(i, "Size/Storage"), r.add(i.key));
         }
-        if (sizeGroup && !usedGroups.has(sizeGroup.key)) {
-            await this.selectRadioFromGroup(sizeGroup, "Size/Storage");
-            usedGroups.add(sizeGroup.key);
-        }
-        if (!colorGroup || !sizeGroup) {
-            const fallbackGroups = radioGroups.filter(g => !usedGroups.has(g.key) && !/payment|pay|monthly/i.test(g.key));
-            if (!colorGroup && fallbackGroups.length) {
-                colorGroup = fallbackGroups.shift();
-                await this.selectRadioFromGroup(colorGroup, "Color/Variant");
-                usedGroups.add(colorGroup.key);
-            }
-            if (!sizeGroup && fallbackGroups.length) {
-                sizeGroup = fallbackGroups.shift();
-                await this.selectRadioFromGroup(sizeGroup, "Size/Storage");
-                usedGroups.add(sizeGroup.key);
-            }
-        }
-        const paymentChoice = this.paymentOptionPrompt ? await this.paymentOptionPrompt() : "2";
-        const payLater = String(paymentChoice).trim() === "1";
-        const label = payLater ? "Pay Later - Monthly" : "Pay Today";
-        console.log(`    Payment option selected: ${label}`);
+        const a = this.paymentOptionPrompt ? await this.paymentOptionPrompt() : "2",
+            s = "1" === String(a).trim(),
+            n = s ? "Pay Later - Monthly" : "Pay Today";
+        this.log(`    Payment option selected: ${n}`);
         this.result.selections.push({
             type: "Payment Option",
-            value: label
+            value: n
         });
-        let paymentOption = null;
-        const paymentStart = Date.now();
-        while (Date.now() - paymentStart < 60000) {
+        let o = null;
+        const c = Date.now();
+        for (; Date.now() - c < 6e4;) {
             try {
-                const selectorCandidates = payLater ? await this.driver.findElements(By.css(`[aa_linktext="${String(this.payLaterPeriod || "").trim()}-month"]`)) : await this.driver.findElements(By.css('[aa_linktext="Pay today"], .shop-option.paymentoption-selection-option'));
-                for (const candidate of selectorCandidates) {
-                    try {
-                        if (!(await candidate.isDisplayed()) || !(await candidate.isEnabled())) continue;
-                        const text = (await candidate.getText()).replace(/\s+/g, " ").trim().toLowerCase();
-                        const aaLinkText = ((await candidate.getAttribute("aa_linktext")) || "").replace(/\s+/g, " ").trim().toLowerCase();
-                        if (payLater) {
-                            const period = String(this.payLaterPeriod || "").trim();
-                            if (!["12", "24", "36"].includes(period)) throw new Error(`Invalid Pay Later period: ${period || "not provided"}. Expected 12, 24, or 36.`);
-                            if (aaLinkText === `${period}-month` || text.includes(`${period}-month`) || text.includes(`${period} month`)) {
-                                paymentOption = candidate;
-                                break;
-                            }
-                        } else if (aaLinkText === "pay today" || text === "pay today" || text.includes("pay today")) {
-                            paymentOption = candidate;
-                            break;
+                const t = s ? await this.driver.findElements(By.css(`[aa_linktext="${String(this.payLaterPeriod||"").trim()}-month"]`)) : await this.driver.findElements(By.css('[aa_linktext="Pay today"],.shop-option.paymentoption-selection-option'));
+                for (const e of t) try {
+                    if (!await e.isDisplayed() || !await e.isEnabled()) continue;
+                    const t = (await e.getText()).replace(/\s+/g, " ").trim().toLowerCase(),
+                        i = (await e.getAttribute("aa_linktext") || "").replace(/\s+/g, " ").trim().toLowerCase();
+                    if (s) {
+                        const r = String(this.payLaterPeriod || "").trim();
+                        if (!["12", "24", "36"].includes(r)) throw new Error(`Invalid Pay Later period: ${r||"not provided"}. Expected 12, 24, or 36 months.`);
+                        if (i === `${r}-month` || t.includes(`${r}-month`) || t.includes(`${r} month`)) {
+                            o = e;
+                            break
                         }
-                    } catch (_) {}
-                }
-            } catch (_) {}
-            if (paymentOption) break;
-            if (payLater && !["12", "24", "36"].includes(String(this.payLaterPeriod || "").trim())) break;
+                    } else if ("pay today" === i || "pay today" === t || t.includes("pay today")) {
+                        o = e;
+                        break
+                    }
+                } catch (t) {}
+            } catch (t) {}
+            if (o) break;
+            if (s && !["12", "24", "36"].includes(String(this.payLaterPeriod || "").trim())) break;
             await this.sleep(500);
         }
-        if (!paymentOption) {
-            const period = String(this.payLaterPeriod || "").trim();
-            const missingLabel = payLater ? `${label} (${period || "36"}-month)` : label;
-            throw new Error(`Payment option '${missingLabel}' was not found on PDP.`);
+        if (!o) {
+            const t = String(this.payLaterPeriod || "").trim();
+            throw new Error(`Payment option '${s?`${n} (${t||"36"}-month)`:n}' was not found on PDP.`)
         }
-        console.log(`    Payment option found on PDP: ${label}`);
-        const paymentOuterHTML = await paymentOption.getAttribute("outerHTML").catch(() => "");
-        const paymentText = (await paymentOption.getText()).replace(/\s+/g, " ").trim();
-        const paymentId = await paymentOption.getAttribute("id").catch(() => "") || "";
-        const paymentClass = await paymentOption.getAttribute("class").catch(() => "") || "";
+        this.log(`    Payment option found on PDP: ${n}`);
+        const l = await o.getAttribute("outerHTML").catch(() => ""),
+            h = (await o.getText()).replace(/\s+/g, " ").trim(),
+            d = await o.getAttribute("id").catch(() => "") || "",
+            u = await o.getAttribute("class").catch(() => "") || "";
         this.result.selections.push({
             type: "Payment Option Element",
-            value: label,
-            text: paymentText || label,
-            id: paymentId,
-            className: paymentClass,
-            outerHTML: paymentOuterHTML,
+            value: n,
+            text: h || n,
+            id: d,
+            className: u,
+            outerHTML: l,
             pageUrl: await this.driver.getCurrentUrl()
         });
         await this.drainPerformanceLogs();
-        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", paymentOption);
+        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", o);
         await this.sleep(500);
         try {
-            await paymentOption.click();
-        } catch (_) {
-            await this.driver.executeScript("arguments[0].click();", paymentOption);
+            await o.click()
+        } catch (t) {
+            await this.driver.executeScript("arguments[0].click();", o)
         }
-        console.log(`    Payment selection clicked: ${label}`);
-        const paymentHits = await this.captureAdobeWindow("Payment option selection", {
-            timeout: Math.min(this.maxAdobeWait, 30000),
+        this.log(`     Payment selection clicked: ${n}`);
+        const w = await this.captureAdobeWindow("Payment option selection", {
+            timeout: Math.min(this.maxAdobeWait, 3e4),
             quietTime: Math.min(this.networkQuietTime, 2500)
         });
-        this.recordAction("OPTION", "Payment Option", label, paymentHits, await this.driver.getCurrentUrl());
-        console.log("    Payment selection recorded. Looking for PDP Next CTA...");
-        const nextStart = Date.now();
-        let nextButton = null;
-        while (Date.now() - nextStart < 60000) {
+        this.recordAction("OPTION", "Payment Option", n, w, await this.driver.getCurrentUrl());
+        this.log("    Payment selection recorded. Looking for PDP Next CTA...");
+        let m = null,
+            g = Date.now();
+        for (; Date.now() - g < 6e4;) {
             try {
-                const candidates = await this.driver.findElements(By.css("#b5-b16-NextCTA button"));
-                for (const button of candidates) {
-                    try {
-                        if (!(await button.isDisplayed()) || !(await button.isEnabled())) continue;
-                        const ariaDisabled = (await button.getAttribute("aria-disabled")) || "";
-                        const disabled = await button.getAttribute("disabled");
-                        if (disabled !== null || ariaDisabled.toLowerCase() === "true") continue;
-                        const text = (await button.getText()).replace(/\s+/g, " ").trim();
-                        if (/^next$/i.test(text) || /\bnext\b/i.test(text)) {
-                            nextButton = button;
-                            break;
-                        }
-                    } catch (_) {}
-                }
-            } catch (_) {}
-            if (nextButton) break;
+                const t = await this.driver.findElements(By.css("#b5-b16-NextCTA button"));
+                for (const e of t) try {
+                    if (!await e.isDisplayed() || !await e.isEnabled()) continue;
+                    const t = await e.getAttribute("aria-disabled") || "";
+                    if (null !== await e.getAttribute("disabled") || "true" === t.toLowerCase()) continue;
+                    const i = (await e.getText()).replace(/\s+/g, " ").trim();
+                    if (/^next$/i.test(i) || /\bnext\b/i.test(i)) {
+                        m = e;
+                        break
+                    }
+                } catch (t) {}
+            } catch (t) {}
+            if (m) break;
             await this.sleep(500);
         }
-        if (!nextButton) throw new Error("Next CTA was not found or did not become enabled on the iPhone PDP within 60 seconds.");
-        const nextOuterHTML = await nextButton.getAttribute("outerHTML").catch(() => "");
-        const nextText = (await nextButton.getText()).replace(/\s+/g, " ").trim();
-        const nextId = await nextButton.getAttribute("id").catch(() => "") || "";
-        const nextClass = await nextButton.getAttribute("class").catch(() => "") || "";
-        console.log(`    PDP CTA found: ${nextText || "Next"}`);
-        console.log("    Next CTA selector: #b5-b16-NextCTA button");
-        console.log(`    Next CTA outerHTML captured: ${nextOuterHTML ? "YES" : "NO"}`);
+        if (!m) throw new Error("Next CTA was not found or did not become enabled on the iPhone PDP within 60 seconds.");
+        const p = await m.getAttribute("outerHTML").catch(() => ""),
+            f = (await m.getText()).replace(/\s+/g, " ").trim(),
+            P = await m.getAttribute("id").catch(() => "") || "",
+            y = await m.getAttribute("class").catch(() => "") || "",
+            v = await this.driver.getCurrentUrl();
         this.result.selections.push({
             type: "PDP Next CTA",
-            value: nextText || "Next",
+            value: f || "Next",
             selector: "#b5-b16-NextCTA button",
-            id: nextId,
-            className: nextClass,
-            outerHTML: nextOuterHTML,
-            pageUrl: await this.driver.getCurrentUrl()
+            id: P,
+            className: y,
+            outerHTML: p,
+            pageUrl: v
         });
         await this.drainPerformanceLogs();
-        await this.clickElement(nextButton, "Next - iPhone");
-        const nextHits = await this.captureAdobeWindow("Next - iPhone / scAdd", {
-            timeout: Math.min(this.maxAdobeWait, 30000),
+        await this.clickElement(m, "Next - iPhone");
+        const b = await this.captureAdobeWindow("Next - iPhone / scAdd", {
+            timeout: Math.min(this.maxAdobeWait, 3e4),
             quietTime: Math.min(this.networkQuietTime, 2500)
         });
-        const scAddHits = nextHits.filter(hit => (hit.events || []).some(event => /^scAdd$/i.test(String(event))) || (hit.eventDetails || []).some(event => /^scAdd$/i.test(String(event.name))));
-        const latestHit = nextHits.length ? nextHits[nextHits.length - 1] : null;
-        const latestHitHasScAdd = !!latestHit && ((latestHit.events || []).some(event => /^scAdd$/i.test(String(event))) || (latestHit.eventDetails || []).some(event => /^scAdd$/i.test(String(event.name))));
-        const nextAction = this.recordAction("CTA", "Next - iPhone", label, nextHits, await this.driver.getCurrentUrl());
-        nextAction.nextCta = {
+        const x = b.filter(t => (t.events || []).some(t => /^scAdd$/i.test(String(t))) || (t.eventDetails || []).some(t => /^scAdd$/i.test(String(t.name))));
+        const S = b.length ? b[b.length - 1] : null,
+            A = !!S && ((S.events || []).some(t => /^scAdd$/i.test(String(t))) || (S.eventDetails || []).some(t => /^scAdd$/i.test(String(t.name))));
+        const q = this.recordAction("CTA", "Next - iPhone", n, b, await this.driver.getCurrentUrl());
+        q.nextCta = {
             selector: "#b5-b16-NextCTA button",
-            text: nextText || "Next",
-            id: nextId,
-            className: nextClass,
-            outerHTML: nextOuterHTML
+            text: f || "Next",
+            id: P,
+            className: y,
+            outerHTML: p
         };
-        nextAction.scAddCaptured = scAddHits.length > 0;
-        nextAction.scAddHitCount = scAddHits.length;
-        nextAction.latestHitHasScAdd = latestHitHasScAdd;
-        nextAction.scAddHits = scAddHits;
+        q.scAddCaptured = x.length > 0;
+        q.scAddHitCount = x.length;
+        q.latestHitHasScAdd = A;
+        q.scAddHits = x;
         this.result.selections.push({
             type: "PDP scAdd Validation",
-            value: scAddHits.length ? "scAdd captured" : "scAdd not captured",
-            scAddCaptured: scAddHits.length > 0,
-            scAddHitCount: scAddHits.length,
-            latestHitHasScAdd,
-            hits: scAddHits
+            value: x.length ? "scAdd captured" : "scAdd not captured",
+            scAddCaptured: x.length > 0,
+            scAddHitCount: x.length,
+            latestHitHasScAdd: A,
+            hits: x
         });
-        console.log(`    Next CTA clicked. Adobe /b/ss hits captured: ${nextHits.length}`);
-        console.log(`    scAdd captured from Next CTA flow: ${scAddHits.length > 0 ? "YES" : "NO"}`);
-        await this.waitForUrlPrefix(this.intentPrefix, 90000);
+        this.log(`    Next CTA clicked. Adobe /b/ss hits captured: ${b.length}`);
+        this.log("    scAdd captured from Next CTA flow: " + (x.length ? "YES" : "NO"));
+        await this.waitForUrlPrefix(this.intentPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Intent Selection", this.intentPrefix);
     }
     async getRadioGroups() {
-        const radios = await this.driver.findElements(By.css("input[type='radio']"));
-        const groups = new Map();
-        for (const radio of radios) {
-            try {
-                if (!(await radio.isDisplayed()) || !(await radio.isEnabled())) continue;
-                const name = (await radio.getAttribute("name")) || "";
-                const id = (await radio.getAttribute("id")) || "";
-                const key = `${name}|${id}` || `radio-${groups.size}`;
-                const label = await this.findRadioLabel(radio);
-                if (!label) continue;
-                const groupKey = name || (await radio.getAttribute("data-group")) || id || key;
-                if (!groups.has(groupKey)) groups.set(groupKey, []);
-                groups.get(groupKey).push({
-                    radio,
-                    label
-                });
-            } catch (_) {}
-        }
-        return [...groups.entries()].map(([key, options]) => ({
-            key,
-            options
+        const t = await this.driver.findElements(By.css("input[type='radio']")),
+            e = new Map;
+        for (const i of t) try {
+            if (!await i.isDisplayed() || !await i.isEnabled()) continue;
+            const t = await i.getAttribute("name") || "",
+                r = await i.getAttribute("id") || "",
+                a = `${t}|${r}`,
+                s = await this.findRadioLabel(i),
+                n = t || await i.getAttribute("data-group") || r || a;
+            if (!s) continue;
+            e.has(n) || e.set(n, []);
+            e.get(n).push({
+                radio: i,
+                label: s
+            });
+        } catch (t) {}
+        return [...e.entries()].map(([t, e]) => ({
+            key: t,
+            options: e
         }));
     }
-    async findRadioLabel(radio) {
-        const id = await radio.getAttribute("id").catch(() => "");
-        if (id) {
-            const labels = await this.driver.findElements(By.css(`label[for="${id.replace(/"/g, '\\"')}"]`));
-            if (labels.length) return this.textOf(labels[0]);
-        }
-        return this.driver.executeScript("return arguments[0].parentElement ? arguments[0].parentElement.innerText : '';", radio).then(x => String(x || "").replace(/\s+/g, " ").trim()).catch(() => "");
+    async findRadioLabel(t) {
+        const e = await t.getAttribute("id").catch(() => "");
+        const i = e ? await this.driver.findElements(By.css(`label[for="${e.replace(/"/g,'\\"')}"]`)) : [];
+        if (i.length) return this.textOf(i[0]);
+        return this.driver.executeScript("return arguments[0].parentElement?arguments[0].parentElement.innerText:'';", t).then(t => String(t || "").replace(/\s+/g, " ").trim()).catch(() => "");
     }
-    async selectRadioFromGroup(group, type) {
-        const selected = group.options[Math.floor(Math.random() * group.options.length)];
-        const value = selected.label;
-        console.log(`    Selected ${type}: ${value}`);
+    async selectRadioFromGroup(t, e) {
+        if (!t || !t.options || !t.options.length) throw new Error(`No options found for ${e}.`);
+        const i = t.options[Math.floor(Math.random() * t.options.length)],
+            r = i.label;
+        this.log(`    Selected ${e}: ${r}`);
         this.result.selections.push({
-            type,
-            value
+            type: e,
+            value: r
         });
         await this.drainPerformanceLogs();
-        await this.clickElement(selected.radio, `${type} - ${value}`);
-        const hits = await this.captureAdobeWindow(`${type} selection`);
-        this.recordAction("OPTION", type, value, hits, await this.driver.getCurrentUrl());
+        await this.clickElement(i.radio, `${e} - ${r}`);
+        const a = await this.captureAdobeWindow(`${e} selection`);
+        this.recordAction("OPTION", e, r, a, await this.driver.getCurrentUrl());
     }
-    async findOptionCandidates(keywords) {
-        const elements = await this.visibleElements(By.xpath("//*[self::label or self::button or @role='button']"));
-        const out = [];
-        for (const el of elements) {
-            const text = (await this.textOf(el)).toLowerCase();
-            const cls = (await el.getAttribute("class").catch(() => ""))?.toLowerCase() || "";
-            const attrText = `${text} ${cls}`;
-            if (!attrText.trim()) continue;
-            if (keywords.some(k => attrText.includes(k))) out.push(el);
+    async findOptionCandidates(t) {
+        const e = await this.visibleElements(By.xpath("//*[self::label or self::button or @role='button']")),
+            i = [];
+        for (const r of e) {
+            const e = `${(await this.textOf(r)).toLowerCase()} ${(await r.getAttribute("class").catch(()=>""))?.toLowerCase()||""}`;
+            if (e.trim() && t.some(t => e.includes(t))) i.push(r);
         }
-        return out.filter((el, i, arr) => arr.findIndex(x => x === el) === i).slice(0, 30);
+        return i.filter((t, e, i) => i.findIndex(e => e === t) === e).slice(0, 30);
     }
     async getPdpNextCta() {
-        const start = Date.now();
-        while (Date.now() - start < 60000) {
+        const t = Date.now();
+        for (; Date.now() - t < 6e4;) {
             try {
-                const byContainer = await this.driver.findElements(By.css("#b5-b16-NextCTA button"));
-                for (const element of byContainer) {
-                    if (!(await element.isDisplayed()) || !(await element.isEnabled())) continue;
-                    const text = (await this.textOf(element)).toLowerCase();
-                    if (text === "next" || text.includes("next")) return element;
-                }
-            } catch (_) {}
+                const t = await this.driver.findElements(By.css("#b5-b16-NextCTA button"));
+                for (const e of t)
+                    if (await e.isDisplayed() && await e.isEnabled()) {
+                        const t = (await this.textOf(e)).toLowerCase();
+                        if ("next" === t || t.includes("next")) return e
+                    }
+            } catch (t) {}
             try {
-                const fallback = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][normalize-space(.)='Next' or contains(normalize-space(.),'Next')]")).then(x => x[0]);
-                if (fallback) return fallback;
-            } catch (_) {}
+                const t = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][normalize-space(.)='Next' or contains(normalize-space(.),'Next')]"));
+                if (t.length) return t[0];
+            } catch (t) {}
             await this.sleep(500);
         }
         return null;
     }
-    async getOuterHTML(element) {
+    async getOuterHTML(t) {
         try {
-            return await this.driver.executeScript("return arguments[0].outerHTML;", element);
-        } catch (_) {
-            return "";
+            return await this.driver.executeScript("return arguments[0].outerHTML;", t)
+        } catch (t) {
+            return ""
         }
     }
     async clickNextToIntent() {
-        const next = await this.getPdpNextCta();
-        if (!next) throw new Error("Next CTA was not found after iPhone PDP/payment selection.");
-        const nextOuterHTML = await this.getOuterHTML(next);
-        const nextText = await this.textOf(next);
-        const nextId = await next.getAttribute("id").catch(() => "");
-        const nextClass = await next.getAttribute("class").catch(() => "");
-        console.log(`    PDP Next CTA found: ${nextText || "Next"}`);
-        console.log(`    PDP Next CTA id: ${nextId || "N/A"}`);
-        console.log(`    PDP Next CTA outerHTML captured: ${nextOuterHTML ? "YES" : "NO"}`);
+        const t = await this.getPdpNextCta();
+        if (!t) throw new Error("Next CTA was not found after iPhone PDP/payment selection.");
+        const e = await this.getOuterHTML(t),
+            i = await this.textOf(t),
+            r = await t.getAttribute("id").catch(() => "") || "",
+            a = await t.getAttribute("class").catch(() => "") || "";
+        this.log(`    PDP Next CTA found: ${i||"Next"}`);
+        this.log(`    PDP Next CTA id: ${r||"N/A"}`);
         await this.drainPerformanceLogs();
-        await this.clickElement(next, "Next - iPhone");
-        const hits = await this.captureAdobeWindow("Next to Intent - scAdd", {
-            timeout: Math.min(this.maxAdobeWait, 30000),
+        await this.clickElement(t, "Next - iPhone");
+        const s = await this.captureAdobeWindow("Next to Intent - scAdd", {
+            timeout: Math.min(this.maxAdobeWait, 3e4),
             quietTime: Math.min(this.networkQuietTime, 2500)
         });
-        const scAddHits = hits.filter(hit => hit.events.some(event => /^scadd$/i.test(event)));
-        const scAddCaptured = scAddHits.length > 0;
-        const latestHit = hits.length ? hits[hits.length - 1] : null;
-        const latestHitHasScAdd = !!(latestHit && latestHit.events.some(event => /^scadd$/i.test(event)));
-        const action = this.recordAction("CTA", "Next - iPhone", "", hits, await this.driver.getCurrentUrl());
-        action.outerHTML = nextOuterHTML;
-        action.element = {
+        const n = s.filter(t => (t.events || []).some(t => /^scadd$/i.test(String(t))) || (t.eventDetails || []).some(t => /^scadd$/i.test(String(t.name)))),
+            o = n.length > 0,
+            c = s.length ? s[s.length - 1] : null,
+            l = !!c && ((c.events || []).some(t => /^scadd$/i.test(String(t))) || (c.eventDetails || []).some(t => /^scadd$/i.test(String(t.name))));
+        const h = this.recordAction("CTA", "Next - iPhone", "", s, await this.driver.getCurrentUrl());
+        h.outerHTML = e;
+        h.element = {
             tagName: "BUTTON",
-            id: nextId || "",
-            className: nextClass || "",
-            text: nextText || "Next"
+            id: r,
+            className: a,
+            text: i || "Next"
         };
-        action.expectedEvent = "scAdd";
-        action.scAddCaptured = scAddCaptured;
-        action.latestHitHasScAdd = latestHitHasScAdd;
-        action.scAddHitCount = scAddHits.length;
-        action.scAddHits = scAddHits;
+        h.expectedEvent = "scAdd";
+        h.scAddCaptured = o;
+        h.latestHitHasScAdd = l;
+        h.scAddHitCount = n.length;
+        h.scAddHits = n;
         this.result.selections.push({
             type: "PDP Next CTA",
-            value: nextText || "Next",
-            outerHTML: nextOuterHTML,
-            scAddCaptured,
-            latestHitHasScAdd,
-            scAddHitCount: scAddHits.length
+            value: i || "Next",
+            outerHTML: e,
+            scAddCaptured: o,
+            latestHitHasScAdd: l,
+            scAddHitCount: n.length
         });
-        console.log(`    b/ss hits captured after PDP Next: ${hits.length}`);
-        console.log(`    scAdd captured: ${scAddCaptured ? "YES" : "NO"}`);
-        console.log(`    Latest b/ss hit contains scAdd: ${latestHitHasScAdd ? "YES" : "NO"}`);
-        if (!scAddCaptured) {
-            console.log("    WARNING: PDP Next CTA was clicked, but no captured b/ss hit contained scAdd.");
-        }
+        this.log(`    b/ss hits captured after PDP Next: ${s.length}`);
+        this.log("    scAdd captured: " + (o ? "YES" : "NO"));
         await this.waitForUrlPrefix(this.intentPrefix);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Intent Selection", this.intentPrefix);
     }
-    async findClickableByText(text, timeout = 60000) {
-        const target = String(text || '').trim();
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
+    async findClickableByText(t, e = 6e4) {
+        const i = String(t || "").trim().toLowerCase(),
+            r = Date.now();
+        for (; Date.now() - r < e;) {
             try {
-                const xpath = `//*[self::button or self::a or @role='button' or self::label][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),${JSON.stringify(target.toLowerCase())})]`;
-                const elements = await this.visibleElements(By.xpath(xpath));
-                if (elements.length) return elements[0];
-            } catch (_) {}
+                const t = `//*[self::button or self::a or @role='button' or self::label][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),${JSON.stringify(i)})]`,
+                    e = await this.visibleElements(By.xpath(t));
+                if (e.length) return e[0];
+            } catch (t) {}
             await this.sleep(500);
         }
         return null;
     }
-    async getNextCtaOnCurrentPage(timeout = 60000) {
-        const start = Date.now();
-        while (Date.now() - start < timeout) {
+    async getNextCtaOnCurrentPage(t = 6e4) {
+        const e = Date.now();
+        for (; Date.now() - e < t;) {
             try {
-                const candidates = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][normalize-space(.)='Next' or contains(normalize-space(.),'Next') or contains(normalize-space(.),'Continue') or contains(normalize-space(.),'Proceed')]")).then(x => x.slice(0, 20));
-                for (const element of candidates) {
-                    const text = await this.textOf(element);
-                    if (/^(next|continue|proceed)(\b|\s)/i.test(text) || /\bnext\b/i.test(text)) return element;
+                const t = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][normalize-space(.)='Next' or contains(normalize-space(.),'Next') or contains(normalize-space(.),'Continue') or contains(normalize-space(.),'Proceed')]"));
+                for (const e of t) {
+                    const t = await this.textOf(e);
+                    if (/^(next|continue|proceed)(\b|\s)/i.test(t) || /\bnext\b/i.test(t)) return e
                 }
-            } catch (_) {}
+            } catch (t) {}
             await this.sleep(500);
         }
         return null;
     }
     async chooseIntent() {
-        console.log("\n[5] Signup for New / Select Line");
-        await this.waitForPageReady(90000);
+        this.log("\n[5] Signup for New / Select Line");
+        await this.waitForPageReady(9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         this.currentStep = "Signup for New / Intent Selection";
         this.result.currentPage = {
@@ -1294,167 +1156,177 @@ hubPasswordProvided:true
         this.result.currentAction = "";
         this.result.currentCTA = "";
         this.result.currentUrl = this.currentPageUrl;
-        const maxLineMessage = await this.driver.findElements(By.xpath("//*[contains(translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'reached the maximum of mobile lines allowed by imda')]")).then(async elements => {
-            for (const element of elements)
-                if (await element.isDisplayed().catch(() => false)) return element;
-            return null;
+        this.progress();
+        const t = await this.driver.findElements(By.xpath("//*[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'reached the maximum of mobile lines allowed by imda')]")).then(async t => {
+            for (const e of t)
+                if (await e.isDisplayed().catch(() => false)) return e;
+            return null
         }).catch(() => null);
-        if (maxLineMessage) {
-            console.log("    Maximum mobile-line limit detected. Selecting a random existing StarHub number.");
-            const options = await this.visibleElements(By.css(".number-selection-option"));
-            if (!options.length) throw new Error("Maximum mobile-line limit displayed, but no existing StarHub number options were found.");
-            const selected = options[Math.floor(Math.random() * options.length)];
-            const value = await this.textOf(selected);
+        if (t) {
+            this.log("    Maximum mobile-line limit detected. Selecting a random existing StarHub number.");
+            const t = await this.visibleElements(By.css(".number-selection-option"));
+            if (!t.length) throw new Error("Maximum mobile-line limit displayed, but no existing StarHub number options were found.");
+            const e = t[Math.floor(Math.random() * t.length)],
+                i = await this.textOf(e);
             this.result.selections.push({
                 type: "Existing StarHub Number",
-                value: value || "Random existing StarHub number",
-                outerHTML: await this.getOuterHTML(selected),
+                value: i || "Random existing StarHub number",
+                outerHTML: await this.getOuterHTML(e),
                 pageUrl: this.currentPageUrl
             });
             await this.drainPerformanceLogs();
-            await this.clickElement(selected, "Random existing StarHub number");
-            const hits = await this.captureAdobeWindow("Existing StarHub number selection", {
-                timeout: Math.min(this.maxAdobeWait, 30000),
+            await this.clickElement(e, "Random existing StarHub number");
+            const r = await this.captureAdobeWindow("Existing StarHub number selection", {
+                timeout: Math.min(this.maxAdobeWait, 3e4),
                 quietTime: Math.min(this.networkQuietTime, 2500)
             });
-            this.recordAction("OPTION", "Existing StarHub Number", value, hits, await this.driver.getCurrentUrl());
+            this.recordAction("OPTION", "Existing StarHub Number", i, r, await this.driver.getCurrentUrl());
         } else {
-            let signup = null;
+            let t = null;
             try {
-                const elements = await this.driver.findElements(By.xpath("//div[contains(@class,'number-card-detail_v2')][.//span[normalize-space()='Sign up for a new line']]"));
-                for (const element of elements) {
-                    if (await element.isDisplayed()) {
-                        signup = element;
-                        break;
+                const e = await this.driver.findElements(By.xpath("//div[contains(@class,'number-card-detail_v2')][.//span[normalize-space()='Sign up for a new line']]"));
+                for (const i of e)
+                    if (await i.isDisplayed()) {
+                        t = i;
+                        break
                     }
-                }
-            } catch (_) {}
-            if (signup) {
-                const value = await this.textOf(signup);
-                console.log("    'Sign up for a new line' found. Selecting it.");
+            } catch (t) {}
+            if (t) {
+                const e = await this.textOf(t);
+                this.log("    'Sign up for a new line' found. Selecting it.");
                 this.result.selections.push({
                     type: "Intent",
-                    value,
-                    outerHTML: await this.getOuterHTML(signup),
+                    value: e,
+                    outerHTML: await this.getOuterHTML(t),
                     pageUrl: this.currentPageUrl
                 });
                 await this.drainPerformanceLogs();
-                if (!/\bselected\b/i.test(await signup.getAttribute("class").catch(() => ""))) await this.clickElement(signup, "Sign up for a new line");
-                const hits = await this.captureAdobeWindow("Signup for new selection", {
-                    timeout: Math.min(this.maxAdobeWait, 30000),
+                if (!/\bselected\b/i.test(await t.getAttribute("class").catch(() => ""))) await this.clickElement(t, "Sign up for a new line");
+                const i = await this.captureAdobeWindow("Signup for new selection", {
+                    timeout: Math.min(this.maxAdobeWait, 3e4),
                     quietTime: Math.min(this.networkQuietTime, 2500)
                 });
-                this.recordAction("OPTION", "Sign up for a new line", value, hits, await this.driver.getCurrentUrl());
+                this.recordAction("OPTION", "Sign up for a new line", e, i, await this.driver.getCurrentUrl());
             } else {
-                console.log("    'Sign up for a new line' was not found. Selecting a random existing line instead.");
-                let options = [];
-                for (const selector of [".number-selection-option", ".number-card-detail_v2", "[class*='number-selection']", "[class*='number-card']"]) {
-                    try {
-                        options.push(...await this.visibleElements(By.css(selector)));
-                    } catch (_) {}
-                }
-                options = options.filter((element, index, arr) => arr.findIndex(x => x === element) === index);
-                if (!options.length) {
-                    try {
-                        options = await this.visibleElements(By.xpath("//*[self::label or self::button or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'mobile number') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'existing number') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'select number')]"));
-                    } catch (_) {}
-                }
-                if (!options.length) throw new Error("Neither 'Sign up for a new line' nor an existing selectable mobile line was found on the Intent Selection page.");
-                const selected = options[Math.floor(Math.random() * options.length)];
-                const value = await this.textOf(selected);
-                console.log(`    Existing line selected: ${value || "Random available line"}`);
+                this.log("    'Sign up for a new line' was not found. Selecting a random existing line instead.");
+                let t = [];
+                for (const e of [".number-selection-option", ".number-card-detail_v2", "[class*='number-selection']", "[class*='number-card']"]) try {
+                    t.push(...await this.visibleElements(By.css(e)))
+                } catch (t) {}
+                t = t.filter((t, e, i) => i.findIndex(e => e === t) === e);
+                if (!t.length) try {
+                    t = await this.visibleElements(By.xpath("//*[self::label or self::button or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'mobile number') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'existing number') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'select number')]"))
+                } catch (t) {}
+                if (!t.length) throw new Error("Neither 'Sign up for a new line' nor an existing selectable mobile line was found on the Intent Selection page.");
+                const e = t[Math.floor(Math.random() * t.length)],
+                    i = await this.textOf(e);
+                this.log(`    Existing line selected: ${i||"Random available line"}`);
                 this.result.selections.push({
                     type: "Existing StarHub Number",
-                    value: value || "Random existing line",
-                    outerHTML: await this.getOuterHTML(selected),
+                    value: i || "Random existing line",
+                    outerHTML: await this.getOuterHTML(e),
                     pageUrl: this.currentPageUrl
                 });
                 await this.drainPerformanceLogs();
-                await this.clickElement(selected, "Random existing line");
-                const hits = await this.captureAdobeWindow("Existing line selection", {
-                    timeout: Math.min(this.maxAdobeWait, 30000),
+                await this.clickElement(e, "Random existing line");
+                const r = await this.captureAdobeWindow("Existing line selection", {
+                    timeout: Math.min(this.maxAdobeWait, 3e4),
                     quietTime: Math.min(this.networkQuietTime, 2500)
                 });
-                this.recordAction("OPTION", "Existing StarHub Number", value, hits, await this.driver.getCurrentUrl());
+                this.recordAction("OPTION", "Existing StarHub Number", i, r, await this.driver.getCurrentUrl());
             }
         }
-        const next = await this.getNextCtaOnCurrentPage(60000);
-        if (!next) throw new Error("Next CTA was not found after intent/existing-number selection.");
-        const nextText = await this.textOf(next);
+        const e = await this.getNextCtaOnCurrentPage(6e4);
+        if (!e) throw new Error("Next CTA was not found after intent/existing-number selection.");
+        const i = await this.textOf(e);
         this.result.selections.push({
             type: "Intent Next CTA",
-            value: nextText || "Next",
-            outerHTML: await this.getOuterHTML(next),
+            value: i || "Next",
+            outerHTML: await this.getOuterHTML(e),
             pageUrl: this.currentPageUrl
         });
         await this.drainPerformanceLogs();
-        await this.clickElement(next, "Next - Intent Selection");
-        const nextHits = await this.captureAdobeWindow("Intent Next CTA", {
-            timeout: Math.min(this.maxAdobeWait, 30000),
+        await this.clickElement(e, "Next - Intent Selection");
+        const r = await this.captureAdobeWindow("Intent Next CTA", {
+            timeout: Math.min(this.maxAdobeWait, 3e4),
             quietTime: Math.min(this.networkQuietTime, 2500)
         });
-        this.recordAction("CTA", "Next - Intent Selection", nextText || "Next", nextHits, await this.driver.getCurrentUrl());
+        this.recordAction("CTA", "Next - Intent Selection", i || "Next", r, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.starPlanPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
-        this.result.currentPage.url = this.currentPageUrl;
-        this.result.currentPageUrl = this.currentPageUrl;
-        this.result.currentUrl = this.currentPageUrl;
+        this.log("    Mobile Plan Selection URL: " + this.currentPageUrl);
+        await this.recordPage("Mobile Plan Selection", this.starPlanPrefix);
     }
     async chooseStarPlan() {
-        console.log("\n[6] Mobile Plan Selection");
-        const card = await this.driver.wait(async () => {
+        this.log("\n[6] Mobile Plan Selection");
+        await this.waitForUrlPrefix(this.starPlanPrefix, 9e4);
+        await this.waitForPageReady(9e4);
+        const t = Date.now();
+        let e = null;
+        for (; Date.now() - t < 6e4;) {
             try {
-                const cards = await this.visibleElements(By.css(".sn-plan-card"));
-                for (const c of cards) {
-                    const text = await this.textOf(c);
-                    if (/5G Unlimited\+ Plus/i.test(text)) return c;
+                const t = await this.visibleElements(By.xpath("//div[contains(@class,'sn-plan-card')][.//div[contains(@class,'plan-name')]//span[normalize-space()='Unlimited+ Plus']"));
+                if (t.length) {
+                    e = t[0];
+                    break
                 }
-            } catch (_) {}
-            return false;
-        }, 60000);
-        if (!card) throw new Error("Mobile plan card '5G Unlimited+ Plus' was not found.");
-        const cardText = await this.textOf(card);
-        const cardHTML = await card.getAttribute("outerHTML");
-        console.log("    Mobile plan found: 5G Unlimited+ Plus");
-        console.log("    Plan card outerHTML captured: " + (cardHTML ? "YES" : "NO"));
-        const selectPlan = await card.findElements(By.xpath(".//button[.//span[normalize-space()='Select plan'] or normalize-space()='Select plan']"));
-        if (!selectPlan.length) throw new Error("'Select plan' CTA was not found inside the 5G Unlimited+ Plus plan card.");
-        const cta = selectPlan[0];
-        const ctaHTML = await cta.getAttribute("outerHTML");
-        console.log("    Select plan CTA outerHTML captured: " + (ctaHTML ? "YES" : "NO"));
+            } catch (t) {}
+            try {
+                const t = await this.visibleElements(By.xpath("//div[contains(@class,'sn-plan-card')][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'unlimited+ plus')]"));
+                if (t.length) {
+                    e = t[0];
+                    break
+                }
+            } catch (t) {}
+            await this.sleep(500);
+        }
+        if (!e) throw new Error("Mobile plan card '5G Unlimited+ Plus' was not found.");
+        const i = await this.getOuterHTML(e),
+            r = await this.textOf(e);
+        this.log("    Mobile plan found: 5G Unlimited+ Plus");
+        let a = await e.findElements(By.xpath(".//button[.//span[normalize-space()='Select plan'] or normalize-space()='Select plan']")).catch(() => []);
+        if (!a.length) try {
+            a = await this.visibleElements(By.xpath("//div[contains(@class,'sn-plan-card')][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'unlimited+ plus')]//button[contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'select plan')]"))
+        } catch (t) {}
+        if (!a.length) throw new Error("The 'Select plan' CTA was not found inside the 5G Unlimited+ Plus plan card.");
+        const s = a[0],
+            n = await this.getOuterHTML(s),
+            o = await this.textOf(s),
+            c = await s.getAttribute("id").catch(() => "") || "",
+            l = await s.getAttribute("class").catch(() => "") || "";
         this.result.selections.push({
             type: "Mobile Plan",
-            value: "5G Unlimited+ Plus"
+            value: "5G Unlimited+ Plus",
+            planName: "Unlimited+ Plus",
+            outerHTML: i,
+            ctaOuterHTML: n,
+            ctaId: c,
+            ctaClass: l,
+            pageUrl: await this.driver.getCurrentUrl()
         });
         await this.drainPerformanceLogs();
-        await this.clickElement(cta, "Select plan - 5G Unlimited+ Plus");
-        const hits = await this.captureAdobeWindow("Mobile Plan Select plan", {
-            timeout: Math.min(this.maxAdobeWait, 30000),
+        await this.clickElement(s, "Select plan - 5G Unlimited+ Plus");
+        const h = await this.captureAdobeWindow("Mobile Plan Select plan", {
+            timeout: Math.min(this.maxAdobeWait, 3e4),
             quietTime: Math.min(this.networkQuietTime, 2500)
         });
-        this.recordAction("CTA", "Select plan", "5G Unlimited+ Plus", hits, await this.driver.getCurrentUrl());
-        console.log("    Select plan clicked. Adobe /b/ss hits captured: " + hits.length);
-        await this.waitForUrlPrefix(this.simPrefix, 90000);
+        this.recordAction("CTA", "Select plan", "5G Unlimited+ Plus", h, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.simPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("SIM Selection Popup", this.simPrefix);
-        console.log("    Landed on SIM Selection page: " + this.currentPageUrl);
     }
     async chooseSim() {
-        console.log("\n[7] SIM Selection Popup");
-        const requestedSim = String(this.simType || "").trim().toLowerCase();
-        if (!requestedSim) {
-            throw new Error("SIM type was not provided at journey start. Please select eSIM or Physical SIM.");
-        }
-        const wantsEsim = requestedSim === "1" || requestedSim === "esim" || requestedSim === "e-sim";
-        const wantsPhysical = requestedSim === "2" || requestedSim === "physical sim" || requestedSim === "physical-sim" || requestedSim === "physical";
-        if (!wantsEsim && !wantsPhysical) {
-            throw new Error(`Invalid SIM type provided at journey start: '${this.simType}'. Expected eSIM or Physical SIM.`);
-        }
+        this.log("\n[7] SIM Selection Popup");
+        const t = String(this.simType || "").trim().toLowerCase();
+        if (!t) throw new Error("SIM type was not provided at journey start. Please select eSIM or Physical SIM.");
+        const e = "1" === t || "esim" === t || "e-sim" === t;
+        if (!e && !["2", "physical sim", "physical-sim", "physical"].includes(t)) throw new Error(`Invalid SIM type provided at journey start: '${this.simType}'. Expected eSIM or Physical SIM.`);
         await this.driver.wait(async () => {
-            const title = await this.driver.findElements(By.xpath("//*[contains(@class,'overlay-modal-title') and contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'select your choice of sim')]")).catch(() => []);
-            const radios = await this.driver.findElements(By.css("input[type='radio'][id*='eSIM'], input[type='radio'][id*='PhysicalSIM']")).catch(() => []);
-            return title.length > 0 || radios.length > 0;
-        }, 60000, "SIM selection popup did not appear");
-        const selectedOption = wantsEsim ? {
+            const t = await this.driver.findElements(By.xpath("//*[contains(@class,'overlay-modal-title') and contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'select your choice of sim')]")).catch(() => []),
+                e = await this.driver.findElements(By.css("input[type='radio'][id*='eSIM'],input[type='radio'][id*='PhysicalSIM']")).catch(() => []);
+            return t.length > 0 || e.length > 0
+        }, 6e4, "SIM selection popup did not appear");
+        const i = e ? {
             value: "eSIM",
             container: "#b3-b1-b2-eSim_Container",
             radio: "#b3-b1-b2-eSIM-input"
@@ -1463,490 +1335,323 @@ hubPasswordProvided:true
             container: "#b3-b1-b2-PhysicalSIM_Container",
             radio: "#b3-b1-b2-PhysicalSIM-input"
         };
-        let selectedRadio = (await this.driver.findElements(By.css(selectedOption.radio)).catch(() => []))[0];
-        if (!selectedRadio) {
-            const labelText = wantsEsim ? "eSIM" : "Physical SIM";
-            const fallback = await this.driver.findElements(By.xpath(`//input[@type='radio' and (contains(@id,'eSIM') or contains(@id,'PhysicalSIM'))][ancestor::*[contains(normalize-space(.),'${labelText}')]]`)).catch(() => []);
-            selectedRadio = fallback[0];
+        let r = (await this.driver.findElements(By.css(i.radio)).catch(() => []))[0];
+        if (!r) r = (await this.driver.findElements(By.xpath(`//input[@type='radio' and (contains(@id,'eSIM') or contains(@id,'PhysicalSIM'))]`)).catch(() => []))[0];
+        if (!r) throw new Error(`SIM option '${i.value}' was not found in the SIM Selection popup.`);
+        if (!await r.isSelected().catch(() => false)) {
+            const t = await this.driver.findElements(By.css(i.container)).catch(() => []);
+            if (t.length) await this.driver.executeScript("arguments[0].click();", t[0]).catch(() => {});
+            else await this.driver.executeScript("arguments[0].click();", r).catch(() => {});
         }
-        if (!selectedRadio) {
-            throw new Error(`SIM option '${selectedOption.value}' was not found in the SIM Selection popup.`);
-        }
-        console.log(`    SIM option requested at journey start: ${selectedOption.value}`);
-        await this.drainPerformanceLogs();
-        const alreadySelected = await selectedRadio.isSelected().catch(() => false);
-        if (!alreadySelected) {
-            const containers = await this.driver.findElements(By.css(selectedOption.container)).catch(() => []);
-            if (containers.length) {
-                await this.driver.executeScript("arguments[0].scrollIntoView({block:'center'});", containers[0]).catch(() => {});
-                await this.driver.executeScript("arguments[0].click();", containers[0]).catch(() => {});
-            } else {
-                await this.driver.executeScript("arguments[0].click();", selectedRadio).catch(() => {});
-            }
-        }
-        await this.driver.wait(async () => await selectedRadio.isSelected().catch(() => false), 15000, `SIM option '${selectedOption.value}' was not selected`);
-        console.log(`    SIM selected: ${selectedOption.value}`);
+        await this.driver.wait(async () => await r.isSelected().catch(() => false), 15e3, `SIM option '${i.value}' was not selected`);
+        this.log(`    SIM selected: ${i.value}`);
         this.result.selections.push({
             type: "SIM",
-            value: selectedOption.value
+            value: i.value
         });
-        const simHits = await this.captureAdobeWindow("SIM selection", {
-            waitMs: 5000,
-            drainBefore: false
-        });
-        this.recordAction("POPUP_OPTION", "SIM", selectedOption.value, simHits, await this.driver.getCurrentUrl());
-        console.log("    SIM selection recorded. Adobe /b/ss hits captured: " + simHits.length);
-        const nextXPath = "//div[contains(@class,'overlay-modal-footer')]//button[.//div[normalize-space()='Next'] or normalize-space()='Next']";
+        const a = await this.captureAdobeWindow("SIM selection");
+        this.recordAction("POPUP_OPTION", "SIM", i.value, a, await this.driver.getCurrentUrl());
+        const s = "//div[contains(@class,'overlay-modal-footer')]//button[.//div[normalize-space()='Next'] or normalize-space()='Next']";
         await this.driver.wait(async () => {
-            const buttons = await this.driver.findElements(By.xpath(nextXPath)).catch(() => []);
-            return buttons.length > 0 && await buttons[0].isEnabled().catch(() => false);
-        }, 30000, "SIM selection Next CTA did not become enabled after selecting the SIM option");
-        const next = (await this.driver.findElements(By.xpath(nextXPath)))[0];
-        console.log("    Next CTA found: Next");
+            const t = await this.driver.findElements(By.xpath(s)).catch(() => []);
+            return t.length > 0 && await t[0].isEnabled().catch(() => false)
+        }, 3e4, "SIM selection Next CTA did not become enabled");
+        const n = (await this.driver.findElements(By.xpath(s)))[0];
         await this.drainPerformanceLogs();
-        await this.clickElement(next, "Next - SIM Selection");
-        const nextHits = await this.captureAdobeWindow("SIM Selection Next");
-        this.recordAction("CTA", "Next", "SIM Selection", nextHits, await this.driver.getCurrentUrl());
-        console.log("    SIM Next clicked. Adobe /b/ss hits captured: " + nextHits.length);
-        await this.waitForUrlPrefix(this.suggestionPrefix, 90000);
+        await this.clickElement(n, "Next - SIM Selection");
+        const o = await this.captureAdobeWindow("SIM Selection Next");
+        this.recordAction("CTA", "Next", "SIM Selection", o, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.suggestionPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Security / Add-ons", this.suggestionPrefix);
     }
     async chooseSecurityAndWatch() {
-        console.log("\n[8] Security / Add-ons");
-        const watchText = "Watch S11 46mm AL";
-        const watchCardXPath = "//div[contains(@class,'product-item-card')][.//*[normalize-space()='Watch S11 46mm AL']]";
-        let watch = null;
-        const watchStart = Date.now();
-        while (Date.now() - watchStart < 30000) {
+        this.log("\n[8] Security / Add-ons");
+        const t = "Watch S11 46mm AL";
+        let e = null;
+        for (let i = Date.now(); Date.now() - i < 3e4;) {
             try {
-                const candidates = await this.visibleElements(By.xpath(watchCardXPath));
-                if (candidates.length) {
-                    watch = candidates[0];
-                    break;
+                const t = await this.visibleElements(By.xpath("//div[contains(@class,'product-item-card')][.//*[normalize-space()='Watch S11 46mm AL']]"));
+                if (t.length) {
+                    e = t[0];
+                    break
                 }
-            } catch (_) {}
+            } catch (t) {}
             await this.sleep(500);
         }
-        if (!watch) throw new Error("Watch S11 46mm AL upsell was not found.");
-        console.log("    Upsell found: Watch S11 46mm AL");
+        if (!e) throw new Error("Watch S11 46mm AL upsell was not found.");
         this.result.selections.push({
             type: "Upsell",
-            value: watchText
+            value: t
         });
         await this.drainPerformanceLogs();
-        await this.clickElement(watch, watchText);
-        const watchClickHits = await this.captureAdobeWindow("Watch upsell click");
-        this.recordAction("CTA", watchText, watchText, watchClickHits, await this.driver.getCurrentUrl());
-        await this.waitForUrlPrefix(this.watchPrefix, 90000);
+        await this.clickElement(e, t);
+        const r = await this.captureAdobeWindow("Watch upsell click");
+        this.recordAction("CTA", t, t, r, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.watchPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Watch S11 46mm AL PDP", this.watchPrefix);
-        console.log("    Watch PDP loaded.");
-        const addToCartXPath = "//button[contains(@class,'add-to-cart-button')][.//span[normalize-space()='Add to cart']]";
-        let addToCart = null;
-        const addToCartStart = Date.now();
-        while (Date.now() - addToCartStart < 30000) {
+        let a = null;
+        for (let i = Date.now(); Date.now() - i < 3e4;) {
             try {
-                const candidates = await this.visibleElements(By.xpath(addToCartXPath));
-                for (const candidate of candidates) {
-                    const text = (await this.textOf(candidate)).replace(/\s+/g, " ").trim().toLowerCase();
-                    if (text === "add to cart") {
-                        addToCart = candidate;
-                        break;
-                    }
+                const t = await this.visibleElements(By.xpath("//button[contains(@class,'add-to-cart-button')][.//span[normalize-space()='Add to cart']]"));
+                if (t.length) {
+                    a = t[0];
+                    break
                 }
-                if (addToCart) break;
-            } catch (_) {}
+            } catch (t) {}
             await this.sleep(500);
         }
-        if (!addToCart) throw new Error("Add to cart CTA was not found on Watch PDP.");
-        console.log("    Add to cart CTA found. Pay Today is already selected.");
+        if (!a) throw new Error("Add to cart CTA was not found on Watch PDP.");
         await this.drainPerformanceLogs();
-        await this.clickElement(addToCart, "Add to cart - Watch");
-        const addToCartHits = await this.captureAdobeWindow("Watch Add to cart");
-        this.recordAction("CTA", "Add to cart", watchText, addToCartHits, await this.driver.getCurrentUrl());
-        console.log("    Add to cart clicked. Adobe /b/ss hits captured: " + addToCartHits.length);
-        await this.waitForUrlPrefix(this.suggestionPrefix, 90000);
+        await this.clickElement(a, "Add to cart - Watch");
+        const n = await this.captureAdobeWindow("Watch Add to cart");
+        this.recordAction("CTA", "Add to cart", t, n, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.suggestionPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Security / Add-ons", this.suggestionPrefix);
-        console.log("    Returned to Security / Add-ons.");
-        const securityCardsXPath = "//div[contains(@class,'protection-item')][.//input[@type='checkbox']]";
-        let securityCards = [];
-        const securityStart = Date.now();
-        while (Date.now() - securityStart < 60000) {
+        let o = [];
+        for (let i = Date.now(); Date.now() - i < 6e4;) {
             try {
-                securityCards = await this.visibleElements(By.xpath(securityCardsXPath));
-                if (securityCards.length >= 2) break;
-            } catch (_) {}
+                o = await this.visibleElements(By.xpath("//div[contains(@class,'protection-item')][.//input[@type='checkbox']]"));
+                if (o.length >= 2) break
+            } catch (t) {}
             await this.sleep(500);
         }
-        if (securityCards.length < 2) {
-            throw new Error("Could not find at least two security/add-on products from the provided protection-item structure.");
-        }
-        const securityOptions = [];
-        for (const card of securityCards) {
-            try {
-                const checkbox = (await card.findElements(By.css("input[type='checkbox']")))[0];
-                if (!checkbox) continue;
-                const nameElements = await card.findElements(By.xpath(".//span[contains(@class,'fw-bold') and @data-expression]")).catch(() => []);
-                let label = "";
-                if (nameElements.length) label = await this.textOf(nameElements[0]);
-                if (!label) {
-                    const text = await this.textOf(card);
-                    label = text.split(/\$|\d+\.\d{2}/)[0].replace(/\s+/g, " ").trim();
-                }
-                if (!label) continue;
-                securityOptions.push({
-                    element: card,
-                    checkbox,
-                    text: label
-                });
-            } catch (_) {}
-        }
-        if (securityOptions.length < 2) {
-            throw new Error("Could not identify at least two security/add-on products.");
-        }
-        const selectedSecurity = securityOptions.sort(() => Math.random() - 0.5).slice(0, 2);
-        console.log("    Selecting 2 random Security / Add-on products after returning from Watch PDP.");
-        for (const item of selectedSecurity) {
-            const label = item.text;
+        if (o.length < 2) throw new Error("Could not find at least two security/add-on products.");
+        const c = [];
+        for (const t of o) try {
+            const e = (await t.findElements(By.css("input[type='checkbox']")))[0];
+            if (!e) continue;
+            const i = await t.findElements(By.xpath(".//span[contains(@class,'fw-bold') and @data-expression]")).catch(() => []);
+            let r = i.length ? await this.textOf(i[0]) : "";
+            if (!r) r = (await this.textOf(t)).split(/\$|\d+\.\d{2}/)[0].replace(/\s+/g, " ").trim();
+            if (r) c.push({
+                element: t,
+                checkbox: e,
+                text: r
+            });
+        } catch (t) {}
+        if (c.length < 2) throw new Error("Could not identify at least two security/add-on products.");
+        const l = c.sort(() => Math.random() - .5).slice(0, 2);
+        for (const t of l) {
             await this.drainPerformanceLogs();
-            await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", item.checkbox).catch(() => {});
-            await this.sleep(300);
-            const alreadySelected = await item.checkbox.isSelected().catch(() => false);
-            if (!alreadySelected) {
-                try {
-                    await item.checkbox.click();
-                } catch (_) {
-                    await this.driver.executeScript("arguments[0].click();", item.checkbox).catch(() => {});
-                }
+            await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", t.checkbox).catch(() => {});
+            if (!await t.checkbox.isSelected().catch(() => false)) try {
+                await t.checkbox.click()
+            } catch (e) {
+                await this.driver.executeScript("arguments[0].click();", t.checkbox).catch(() => {})
             }
-            await this.sleep(500);
-            console.log(`    Security option selected: ${label}`);
-            const hits = await this.captureAdobeWindow("Security selection");
+            this.log(`    Security option selected: ${t.text}`);
+            const e = await this.captureAdobeWindow("Security selection");
             this.result.selections.push({
                 type: "Security Add-on",
-                value: label
+                value: t.text
             });
-            this.recordAction("OPTION", "Security Add-on", label, hits, await this.driver.getCurrentUrl());
+            this.recordAction("OPTION", "Security Add-on", t.text, e, await this.driver.getCurrentUrl());
         }
-        await this.sleep(1500);
-        let continueCta = null;
-        const continueStart = Date.now();
-        const continueXPath = "//div[contains(@class,'grid-content-10columns')]//button[contains(@class,'skip-button') and contains(@class,'btn-primary')][.//span[normalize-space()='Continue']]";
-        while (Date.now() - continueStart < 30000) {
+        let h = null;
+        for (let i = Date.now(); Date.now() - i < 3e4;) {
             try {
-                const candidates = await this.driver.findElements(By.xpath(continueXPath));
-                for (const candidate of candidates) {
-                    try {
-                        if (await candidate.isDisplayed() && await candidate.isEnabled()) {
-                            continueCta = candidate;
-                            break;
-                        }
-                    } catch (_) {}
+                const t = await this.driver.findElements(By.xpath("//div[contains(@class,'grid-content-10columns')]//button[contains(@class,'skip-button') and contains(@class,'btn-primary')][.//span[normalize-space()='Continue']]"));
+                if (t.length && await t[0].isDisplayed() && await t[0].isEnabled()) {
+                    h = t[0];
+                    break
                 }
-                if (continueCta) break;
-            } catch (_) {}
+            } catch (t) {}
             await this.sleep(500);
         }
-        if (!continueCta) throw new Error("Security / Add-ons Continue CTA was not found after selecting security products.");
-        console.log("    Continue CTA found.");
-        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", continueCta).catch(() => {});
-        await this.sleep(500);
+        if (!h) throw new Error("Security / Add-ons Continue CTA was not found.");
         await this.drainPerformanceLogs();
-        try {
-            await continueCta.click();
-        } catch (_) {
-            await this.driver.executeScript("arguments[0].click();", continueCta);
-        }
-        const continueHits = await this.captureAdobeWindow("Security / Add-ons Continue");
-        this.recordAction("CTA", "Continue", "Security / Add-ons", continueHits, await this.driver.getCurrentUrl());
-        console.log("    Security Continue clicked. Adobe /b/ss hits captured: " + continueHits.length);
-        await this.waitForUrlPrefix(this.reviewOrderPrefix, 90000);
+        await this.clickElement(h, "Continue");
+        const d = await this.captureAdobeWindow("Security / Add-ons Continue");
+        this.recordAction("CTA", "Continue", "Security / Add-ons", d, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.reviewOrderPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Review Order / Cart", this.reviewOrderPrefix);
-        const cartViewStart = Date.now();
-        let cartViewHits = [];
-        while (Date.now() - cartViewStart < 15000) {
-            const hits = await this.captureAdobeWindow("Cart View", {
-                waitMs: 1000,
-                drainBefore: false
-            });
-            const matchingHits = hits.filter(hit => (hit.events || []).some(event => /cart.?view|scview/i.test(String(event))));
-            if (matchingHits.length) {
-                cartViewHits = matchingHits;
-                break;
-            }
-            await this.sleep(500);
-        }
-        if (cartViewHits.length) {
-            const cartViewEvents = [...new Set(cartViewHits.flatMap(hit => hit.events || []))];
-            this.recordAction("EVENT", "Cart View", "Review Order / Cart", cartViewHits, await this.driver.getCurrentUrl());
-            console.log("    Cart View event captured: " + cartViewEvents.join(", "));
-        } else {
-            console.log("    Cart View event was not captured after landing on Review Order / Cart.");
-        }
     }
     async chooseMobileNumber() {
-        console.log("\n[9] Cart Page – Proceed to Checkout CTA Validation");
-        const next = await this.visibleElements(By.xpath("//button[@id='b3-BtnCheckoutWeb']")).then(x => x[0]);
-        if (next) {
+        this.log("\n[9] Cart Page – Proceed to Checkout CTA Validation");
+        const t = (await this.visibleElements(By.xpath("//button[@id='b3-BtnCheckoutWeb']")))[0];
+        if (t) {
             await this.drainPerformanceLogs();
-            await this.clickElement(next, "Proceed to checkout");
-            const hits = await this.captureAdobeWindow("Proceed to checkout");
-            const checkoutStartHits = hits.filter(hit => (hit.events || []).some(event => /checkout.?start|sccheckout/i.test(String(event))));
-            this.recordAction("CTA", "Proceed to checkout", "", hits, await this.driver.getCurrentUrl());
-            if (checkoutStartHits.length) {
-                const checkoutStartEvents = [...new Set(checkoutStartHits.flatMap(hit => hit.events || []))];
-                this.recordAction("EVENT", "Checkout Start", "Proceed to checkout", checkoutStartHits, await this.driver.getCurrentUrl());
-                console.log("    Checkout Start event captured: " + checkoutStartEvents.join(", "));
-            } else {
-                console.log("    Checkout Start event was not captured after Proceed to checkout.");
-            }
-        } else {
-            await this.driver.get(this.mobileNumberPrefix);
-        }
-        await this.waitForUrlPrefix(this.mobileNumberPrefix, 90000);
-        await this.driver.wait(until.urlContains("/personal/checkout/your-mobile-number"), 90000, "Your Mobile Number page was not reached after Proceed to checkout.");
+            await this.clickElement(t, "Proceed to checkout");
+            const e = await this.captureAdobeWindow("Proceed to checkout");
+            const i = e.filter(t => (t.events || []).some(t => /checkout.?start|sccheckout/i.test(String(t))));
+            this.recordAction("CTA", "Proceed to checkout", "", e, await this.driver.getCurrentUrl());
+            if (i.length) this.recordAction("EVENT", "Checkout Start", "Proceed to checkout", i, await this.driver.getCurrentUrl());
+        } else await this.driver.get(this.mobileNumberPrefix);
+        await this.waitForUrlPrefix(this.mobileNumberPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Checkout - Mobile Number", this.mobileNumberPrefix);
-        console.log("    Mobile Number pageLoad recorded: " + this.currentPageUrl);
-        const numberOptionsXPath = "//div[contains(@class,'number-selection-option')]";
-        let numberOptions = [];
-        const numberWaitStart = Date.now();
-        while (Date.now() - numberWaitStart < 30000) {
+        let e = [];
+        for (let i = Date.now(); Date.now() - i < 3e4;) {
             try {
-                const candidates = await this.driver.findElements(By.xpath(numberOptionsXPath));
-                numberOptions = [];
-                for (const candidate of candidates) {
-                    try {
-                        if (await candidate.isDisplayed()) numberOptions.push(candidate);
-                    } catch (_) {}
-                }
-                if (numberOptions.length) break;
-            } catch (_) {}
+                e = await this.visibleElements(By.xpath("//div[contains(@class,'number-selection-option')]"));
+                if (e.length) break
+            } catch (t) {}
             await this.sleep(500);
         }
-        if (!numberOptions.length) throw new Error("No mobile number options were found after waiting for the page to render.");
-        const selected = numberOptions[Math.floor(Math.random() * numberOptions.length)];
-        const value = await this.textOf(selected);
-        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", selected).catch(() => {});
+        if (!e.length) throw new Error("No mobile number options were found after waiting for the page to render.");
+        const r = e[Math.floor(Math.random() * e.length)],
+            a = await this.textOf(r);
+        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", r).catch(() => {});
         await this.drainPerformanceLogs();
-        await this.clickElement(selected, `Mobile Number - ${value}`);
-        console.log(`    Mobile number selected: ${value}`);
+        await this.clickElement(r, `Mobile Number - ${a}`);
         this.result.selections.push({
             type: "Mobile Number",
-            value
+            value: a
         });
-        const hits = await this.captureAdobeWindow("Mobile number selection");
-        this.recordAction("OPTION", "Mobile Number", value, hits, await this.driver.getCurrentUrl());
-        const cont = await this.driver.wait(until.elementLocated(By.xpath("//button[contains(@class,'add-plan-btn')][.//span[normalize-space()='Next']]")), this.timeout);
-        await this.driver.wait(async () => {
-            const disabled = await cont.getAttribute("disabled");
-            return !disabled && await cont.isEnabled();
-        }, this.timeout, "Next CTA remained disabled after mobile number selection.");
+        const s = await this.captureAdobeWindow("Mobile number selection");
+        this.recordAction("OPTION", "Mobile Number", a, s, await this.driver.getCurrentUrl());
+        const n = await this.driver.wait(until.elementLocated(By.xpath("//button[contains(@class,'add-plan-btn')][.//span[normalize-space()='Next']]")), this.timeout);
+        await this.driver.wait(async () => !await n.getAttribute("disabled") && await n.isEnabled(), this.timeout, "Next CTA remained disabled after mobile number selection.");
         await this.drainPerformanceLogs();
-        await this.clickElement(cont, "Next - Mobile Number");
-        const nextHits = await this.captureAdobeWindow("Next after mobile number");
-        this.recordAction("CTA", "Next - Mobile Number", "", nextHits, await this.driver.getCurrentUrl());
-        await this.waitForUrlPrefix(this.reviewDetailPrefix);
+        await this.clickElement(n, "Next - Mobile Number");
+        const o = await this.captureAdobeWindow("Next after mobile number");
+        this.recordAction("CTA", "Next - Mobile Number", "", o, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.reviewDetailPrefix, 9e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Checkout - Review Detail", this.reviewDetailPrefix);
     }
     async deliveryFlow() {
-        console.log("\n[10] Delivery + Date/Time Popup");
-        await this.driver.wait(async () => {
+        this.log("\n[10] Delivery + Date/Time Popup");
+        await this.waitForPageReady(6e4);
+        let t = null;
+        for (let i = Date.now(); Date.now() - i < 6e4;) {
             try {
-                return await this.driver.executeScript("return document.readyState === 'complete';");
-            } catch (_) {
-                return false;
-            }
-        }, 60000, "Review Detail page did not finish loading.");
-        await this.driver.wait(until.elementLocated(By.xpath("//*[normalize-space()='Select delivery options and review']")), 60000, "Delivery section did not render on Review Detail page.");
-        const standardInputXPath = "//input[@type='radio' and @value='standard_delivery']";
-        let standardInput = null;
-        const deliveryStart = Date.now();
-        while (Date.now() - deliveryStart < 60000) {
-            try {
-                const inputs = await this.driver.findElements(By.xpath(standardInputXPath));
-                for (const input of inputs) {
-                    if (await input.isDisplayed()) {
-                        standardInput = input;
-                        break;
-                    }
-                }
-                if (standardInput) break;
-            } catch (_) {}
-            await this.sleep(1000);
+                const e = await this.driver.findElements(By.xpath("//input[@type='radio' and @value='standard_delivery']"));
+                for (const i of e)
+                    if (await i.isDisplayed()) {
+                        t = i;
+                        break
+                    } if (t) break
+            } catch (t) {}
+            await this.sleep(1e3);
         }
-        if (!standardInput) throw new Error("Standard delivery option was not found after waiting for the Review Detail page to render.");
-        const standardOption = await standardInput.findElement(By.xpath("ancestor::div[contains(@class,'delivery-available-item')][1]"));
-        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", standardOption).catch(() => {});
+        if (!t) throw new Error("Standard delivery option was not found.");
+        const e = await t.findElement(By.xpath("ancestor::div[contains(@class,'delivery-available-item')][1]"));
+        await this.driver.executeScript("arguments[0].scrollIntoView({block:'center',inline:'center'});", e).catch(() => {});
         await this.drainPerformanceLogs();
-        await this.clickElement(standardOption, "Standard Delivery");
-        const standardHits = await this.captureAdobeWindow("Standard delivery selection");
-        this.recordAction("POPUP_OPTION", "Delivery", "Standard Delivery", standardHits, await this.driver.getCurrentUrl());
-        await this.driver.wait(until.elementLocated(By.xpath("//*[normalize-space()='Select an address']")), 60000, "Standard delivery address interface did not render.");
-        const selectedAddress = await this.driver.wait(until.elementLocated(By.css("input[type='radio'][name*='rdo_Address'][checked], input[type='radio'][value][checked]")), 60000, "No pre-selected delivery address was found.");
-        if (!(await selectedAddress.isSelected().catch(() => false))) {
-            await this.driver.executeScript("arguments[0].click();", selectedAddress);
-        }
-        console.log("    Existing delivery address is selected.");
-        const dateCta = await this.driver.wait(until.elementLocated(By.xpath("//button[.//*[normalize-space()='Next, select date & time'] or normalize-space()='Next, select date & time']")), 60000, "'Next, select date & time' CTA was not found.");
-        await this.driver.wait(async () => await dateCta.isDisplayed() && await dateCta.isEnabled(), 30000);
+        await this.clickElement(e, "Standard Delivery");
+        const i = await this.captureAdobeWindow("Standard delivery selection");
+        this.recordAction("POPUP_OPTION", "Delivery", "Standard Delivery", i, await this.driver.getCurrentUrl());
+        const r = await this.driver.wait(until.elementLocated(By.xpath("//*[normalize-space()='Select an address']")), 6e4, "Standard delivery address interface did not render.");
+        const a = await this.driver.wait(until.elementLocated(By.css("input[type='radio'][name*='rdo_Address'][checked],input[type='radio'][value][checked]")), 6e4, "No pre-selected delivery address was found.");
+        if (!await a.isSelected().catch(() => false)) await this.driver.executeScript("arguments[0].click();", a);
+        const s = await this.driver.wait(until.elementLocated(By.xpath("//button[.//*[normalize-space()='Next, select date & time'] or normalize-space()='Next, select date & time']")), 6e4, "'Next, select date & time' CTA was not found.");
+        await this.driver.wait(async () => await s.isDisplayed() && await s.isEnabled(), 3e4);
         await this.drainPerformanceLogs();
-        await this.clickElement(dateCta, "Next, select date & time");
-        const dateOpenHits = await this.captureAdobeWindow("Delivery date popup");
-        this.recordAction("CTA", "Next, select date & time", "", dateOpenHits, await this.driver.getCurrentUrl());
-        await this.driver.wait(until.elementLocated(By.css("[popupnameattribute='Delivery Timeslot']")), 60000, "Delivery Timeslot popup did not open.");
-        await this.driver.wait(until.elementLocated(By.css("select[id*='dd_DeliveryDate']")), 60000, "Delivery date dropdown was not found.");
-        const target = new Date();
-        target.setHours(0, 0, 0, 0);
-        target.setDate(target.getDate() + 2);
-        const targetDateLabel = target.toLocaleDateString("en-US", {
-            day: "numeric",
-            month: "long",
-            year: "numeric"
-        });
-        const dateSelect = await this.driver.findElement(By.css("select[id*='dd_DeliveryDate']"));
-        const dateResult = await this.driver.executeScript(` const select = arguments[0]; const target = new Date(arguments[1]); const day = String(target.getDate()); const month = target.toLocaleDateString('en-US', { month: 'long' }); const year = String(target.getFullYear()); const wantedDayFirst = (day + ' ' + month + ' ' + year).toLowerCase(); const wantedMonthFirst = (month + ' ' + day + ', ' + year).toLowerCase(); const isoDate = year + '-' + String(target.getMonth() + 1).padStart(2, '0') + '-' + String(target.getDate()).padStart(2, '0'); let index = -1; for (let i = 0; i < select.options.length; i++) { const option = select.options[i]; const text = String(option.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase(); const value = String(option.value || '').replace(/\s+/g, ' ').trim().toLowerCase(); if ( text.includes(wantedDayFirst) || text.includes(wantedMonthFirst) || value.includes(isoDate) ) { index = i; break; } const parsed = new Date(text); if ( !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === target.getFullYear() && parsed.getMonth() === target.getMonth() && parsed.getDate() === target.getDate() ) { index = i; break; } } if (index < 0) return { index: -1, options: Array.from(select.options).map(o => o.textContent.trim()) }; select.selectedIndex = index; select.dispatchEvent(new Event('change', { bubbles: true })); select.dispatchEvent(new Event('input', { bubbles: true })); return { index, value: select.options[index].textContent.trim() }; `, dateSelect, target.getTime());
-        if (!dateResult || dateResult.index < 0) {
-            throw new Error(`Could not find delivery date for +2 days (${targetDateLabel}). Available dates: ${dateResult?.options?.join(' | ') || 'none'}`);
-        }
-        console.log(`    Delivery date selected: ${dateResult.value}`);
+        await this.clickElement(s, "Next, select date & time");
+        const n = await this.captureAdobeWindow("Delivery date popup");
+        this.recordAction("CTA", "Next, select date & time", "", n, await this.driver.getCurrentUrl());
+        await this.driver.wait(until.elementLocated(By.css("[popupnameattribute='Delivery Timeslot']")), 6e4, "Delivery Timeslot popup did not open.");
+        const o = new Date;
+        o.setHours(0, 0, 0, 0);
+        o.setDate(o.getDate() + 2);
+        const c = await this.driver.findElement(By.css("select[id*='dd_DeliveryDate']"));
+        const l = await this.driver.executeScript("const s=arguments[0],d=new Date(arguments[1]),day=String(d.getDate()),month=d.toLocaleDateString('en-US',{month:'long'}),year=String(d.getFullYear()),iso=year+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');let x=-1;for(let i=0;i<s.options.length;i++){const o=s.options[i],t=String(o.textContent||'').replace(/\\s+/g,' ').trim().toLowerCase(),v=String(o.value||'').toLowerCase();if(t.includes((day+' '+month+' '+year).toLowerCase())||t.includes((month+' '+day+', '+year).toLowerCase())||v.includes(iso)){x=i;break}}if(x<0)return{index:-1,options:Array.from(s.options).map(o=>o.textContent.trim())};s.selectedIndex=x;s.dispatchEvent(new Event('change',{bubbles:true}));s.dispatchEvent(new Event('input',{bubbles:true}));return{index:x,value:s.options[x].textContent.trim()}", c, o.getTime());
+        if (!l || l.index < 0) throw new Error("Could not find delivery date for +2 days.");
+        this.log(`    Delivery date selected: ${l.value}`);
         this.result.selections.push({
             type: "Delivery Date",
-            value: dateResult.value
+            value: l.value
         });
-        const dateHits = await this.captureAdobeWindow("Delivery date selection");
-        this.recordAction("POPUP_OPTION", "Delivery Date", dateResult.value, dateHits, await this.driver.getCurrentUrl());
-        const timeCandidates = await this.visibleElements(By.xpath("//*[contains(@class,'selection-tab')][.//*[contains(normalize-space(.),'am') or contains(normalize-space(.),'pm')]]"));
-        if (!timeCandidates.length) throw new Error("No delivery time slots were found.");
-        const timeChoice = timeCandidates[Math.floor(Math.random() * timeCandidates.length)];
-        const timeValue = await this.textOf(timeChoice);
+        const h = await this.captureAdobeWindow("Delivery date selection");
+        this.recordAction("POPUP_OPTION", "Delivery Date", l.value, h, await this.driver.getCurrentUrl());
+        const d = await this.visibleElements(By.xpath("//*[contains(@class,'selection-tab')][.//*[contains(normalize-space(.),'am') or contains(normalize-space(.),'pm')]]"));
+        if (!d.length) throw new Error("No delivery time slots were found.");
+        const u = d[Math.floor(Math.random() * d.length)],
+            w = await this.textOf(u);
         await this.drainPerformanceLogs();
-        await this.clickElement(timeChoice, `Delivery time - ${timeValue}`);
-        console.log(`    Delivery time selected: ${timeValue}`);
+        await this.clickElement(u, `Delivery time - ${w}`);
         this.result.selections.push({
             type: "Delivery Time",
-            value: timeValue
+            value: w
         });
-        const timeHits = await this.captureAdobeWindow("Delivery time selection");
-        this.recordAction("POPUP_OPTION", "Delivery Time", timeValue, timeHits, await this.driver.getCurrentUrl());
-        const confirm = await this.driver.wait(until.elementLocated(By.css("#b3-b80-b14-ConfirmButton")), 30000, "Confirm CTA was not found in delivery date/time popup.");
-        await this.driver.wait(async () => await confirm.isDisplayed() && await confirm.isEnabled(), 30000);
+        const g = await this.captureAdobeWindow("Delivery time selection");
+        this.recordAction("POPUP_OPTION", "Delivery Time", w, g, await this.driver.getCurrentUrl());
+        const m = await this.driver.wait(until.elementLocated(By.css("#b3-b80-b14-ConfirmButton")), 3e4, "Confirm CTA was not found in delivery date/time popup.");
+        await this.driver.wait(async () => await m.isDisplayed() && await m.isEnabled(), 3e4);
         await this.drainPerformanceLogs();
-        await this.clickElement(confirm, "Confirm delivery date/time");
-        const confirmHits = await this.captureAdobeWindow("Delivery confirmation");
-        this.recordAction("CTA", "Confirm delivery date/time", `${dateResult.value} ${timeValue}`, confirmHits, await this.driver.getCurrentUrl());
-        await this.driver.wait(async () => {
-            try {
-                return (await this.driver.findElements(By.css("[popupnameattribute='Delivery Timeslot']"))).length === 0;
-            } catch (_) {
-                return false;
-            }
-        }, 60000, "Delivery Timeslot popup did not close after confirmation.");
-        await this.driver.wait(until.elementLocated(By.css("#b3-Ack")), 60000, "Review Detail agreement section did not render after delivery confirmation.");
+        await this.clickElement(m, "Confirm delivery date/time");
+        const p = await this.captureAdobeWindow("Delivery confirmation");
+        this.recordAction("CTA", "Confirm delivery date/time", `${l.value} ${w}`, p, await this.driver.getCurrentUrl());
+        await this.driver.wait(async () => 0 === (await this.driver.findElements(By.css("[popupnameattribute='Delivery Timeslot']"))).length, 6e4, "Delivery Timeslot popup did not close.");
+        await this.driver.wait(until.elementLocated(By.css("#b3-Ack")), 6e4, "Review Detail agreement section did not render.");
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("Checkout - Review Detail After Delivery", this.reviewDetailPrefix);
     }
     async confirmAndPay() {
-        console.log("\n[11] Confirm and Pay + CVV");
-        const ack = await this.visibleElements(By.css("#b3-Ack"));
-        if (!ack.length) throw new Error("Required T&Cs checkbox #b3-Ack was not found.");
-        if (!(await ack[0].isSelected().catch(() => false))) {
+        this.log("\n[11] Confirm and Pay + CVV");
+        const t = await this.visibleElements(By.css("#b3-Ack"));
+        if (!t.length) throw new Error("Required T&Cs checkbox #b3-Ack was not found.");
+        if (!await t[0].isSelected().catch(() => false)) {
             await this.drainPerformanceLogs();
-            await this.clickElement(ack[0], "T&Cs checkbox");
-            const ackHits = await this.captureAdobeWindow("T&Cs checkbox");
-            this.recordAction("CHECKBOX", "b3-Ack", "Selected", ackHits, await this.driver.getCurrentUrl());
+            await this.clickElement(t[0], "T&Cs checkbox");
+            const e = await this.captureAdobeWindow("T&Cs checkbox");
+            this.recordAction("CHECKBOX", "b3-Ack", "Selected", e, await this.driver.getCurrentUrl())
         }
-        const confirmPay = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm and pay')]")).then(x => x[0]);
-        if (!confirmPay) throw new Error("Confirm and Pay CTA was not found.");
+        const e = (await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm and pay')]")))[0];
+        if (!e) throw new Error("Confirm and Pay CTA was not found.");
         await this.drainPerformanceLogs();
-        await this.clickElement(confirmPay, "Confirm and Pay");
-        const urlBeforePay = await this.driver.getCurrentUrl();
-        const payHits = await this.captureAdobeWindow("Confirm and Pay");
-        this.recordAction("CTA", "Confirm and Pay", "", payHits, await this.driver.getCurrentUrl());
-        console.log("    Confirm and Pay clicked. Waiting for the site to reload/navigate to the next page...");
-        await this.driver.wait(async () => {
-            try {
-                const currentUrl = await this.driver.getCurrentUrl();
-                return currentUrl !== urlBeforePay;
-            } catch (_) {
-                return false;
-            }
-        }, 60000, "Site did not navigate after Confirm and Pay.");
-        await this.waitForPageReady(60000);
-        await this.sleep(2000);
-        const postPayPageLoadHits = await this.captureAdobeWindow("Post Confirm and Pay pageLoad", {
+        await this.clickElement(e, "Confirm and Pay");
+        const i = await this.driver.getCurrentUrl(),
+            r = await this.captureAdobeWindow("Confirm and Pay");
+        this.recordAction("CTA", "Confirm and Pay", "", r, await this.driver.getCurrentUrl());
+        await this.driver.wait(async () => await this.driver.getCurrentUrl() !== i, 6e4, "Site did not navigate after Confirm and Pay.");
+        await this.waitForPageReady(6e4);
+        await this.sleep(2e3);
+        const a = await this.captureAdobeWindow("Post Confirm and Pay pageLoad", {
             isPageLoad: true
         });
-        this.recordAction("PAGE_LOAD", "Post Confirm and Pay", postPayPageLoadHits.length ? "pageLoad captured" : "pageLoad not captured", postPayPageLoadHits, await this.driver.getCurrentUrl());
-        console.log("    Next page loaded after Confirm and Pay.");
-        const successAlreadyReached = (await this.driver.getCurrentUrl()).toLowerCase().includes("checkout-success");
-        if (!successAlreadyReached) {
-            const intermediateCandidates = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'done') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'confirm') ]"));
-            const intermediateCta = intermediateCandidates.length ? intermediateCandidates[0] : null;
-            if (intermediateCta) {
-                await this.drainPerformanceLogs();
-                await this.clickElement(intermediateCta, "Done/Confirm");
-                const intermediateHits = await this.captureAdobeWindow("Done/Confirm");
-                this.recordAction("CTA", "Done/Confirm", "", intermediateHits, await this.driver.getCurrentUrl());
-                console.log("    Done/Confirm CTA clicked. Waiting for success page...");
-            } else {
-                console.log("    No intermediate Done/Confirm CTA found; continuing with direct success-page flow.");
-            }
-        }
+        this.recordAction("PAGE_LOAD", "Post Confirm and Pay", a.length ? "pageLoad captured" : "pageLoad not captured", a, await this.driver.getCurrentUrl());
     }
     async threeDsAndSuccess() {
-        console.log("\n[12] 3DS + Order Success");
-        const currentUrl = (await this.driver.getCurrentUrl()).toLowerCase();
-        if (!currentUrl.includes("checkout-success")) {
-            await this.driver.wait(async () => {
-                const url = (await this.driver.getCurrentUrl()).toLowerCase();
-                return url.includes("checkout-success") || url.includes("3ds") || url.includes("three");
-            }, 120000, "Neither 3DS nor success page was reached after Confirm and Pay.");
-        }
-        const afterPayUrl = (await this.driver.getCurrentUrl()).toLowerCase();
-        if (afterPayUrl.includes("checkout-success")) {
+        this.log("\n[12] 3DS + Order Success");
+        let t = (await this.driver.getCurrentUrl()).toLowerCase();
+        if (t.includes("checkout-success")) {
             this.currentPageUrl = await this.driver.getCurrentUrl();
-            const successPage = await this.recordPage("Order Success", this.successPrefix);
-            const allSuccessHits = successPage.hits;
-            console.log("    Direct order success page reached: " + this.currentPageUrl);
-            return;
+            await this.recordPage("Order Success", this.successPrefix);
+            this.log("    Direct order success page reached: " + this.currentPageUrl);
+            return
         }
-        await this.waitForUrlPrefix(this.threeDsPrefix, 60000);
+        await this.driver.wait(async () => {
+            const t = (await this.driver.getCurrentUrl()).toLowerCase();
+            return t.includes("checkout-success") || t.includes("3ds") || t.includes("three")
+        }, 12e4, "Neither 3DS nor success page was reached after Confirm and Pay.");
+        t = (await this.driver.getCurrentUrl()).toLowerCase();
+        if (t.includes("checkout-success")) {
+            this.currentPageUrl = await this.driver.getCurrentUrl();
+            await this.recordPage("Order Success", this.successPrefix);
+            return
+        }
+        await this.waitForUrlPrefix(this.threeDsPrefix, 6e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
         await this.recordPage("3DS Loading Page", this.threeDsPrefix);
-        const submit = await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'submit') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'proceed')]")).then(x => x[0]);
-        if (!submit) throw new Error("3DS Submit CTA was not found.");
+        const e = (await this.visibleElements(By.xpath("//*[self::button or self::a or @role='button'][contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'submit') or contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'proceed')]")))[0];
+        if (!e) throw new Error("3DS Submit CTA was not found.");
         await this.drainPerformanceLogs();
-        await this.clickElement(submit, "3DS Submit");
-        const submitHits = await this.captureAdobeWindow("3DS Submit");
-        this.recordAction("CTA", "3DS Submit", "", submitHits, await this.driver.getCurrentUrl());
-        await this.waitForUrlPrefix(this.successPrefix, 120000);
+        await this.clickElement(e, "3DS Submit");
+        const i = await this.captureAdobeWindow("3DS Submit");
+        this.recordAction("CTA", "3DS Submit", "", i, await this.driver.getCurrentUrl());
+        await this.waitForUrlPrefix(this.successPrefix, 12e4);
         this.currentPageUrl = await this.driver.getCurrentUrl();
-        const successPage = await this.recordPage("Order Success", this.successPrefix);
-        const allSuccessHits = successPage.hits;
-        const orderCandidates = this.result.orders.filter(x => x.pageUrl && x.pageUrl.toLowerCase().includes("checkout-success"));
-        if (!orderCandidates.length && allSuccessHits.length) {
-            for (const hit of allSuccessHits) {
-                if (hit.orderId || hit.revenue || hit.products || hit.events.length) {
-                    this.result.orders.push({
-                        pageUrl: this.currentPageUrl,
-                        pageName: hit.pageName,
-                        orderId: hit.orderId,
-                        revenue: hit.revenue,
-                        products: hit.products,
-                        events: hit.events,
-                        eVars: hit.eVars,
-                        props: hit.props,
-                        timestamp: hit.timestamp
-                    });
-                }
-            }
-        }
-        console.log("    Order success page reached: " + this.currentPageUrl);
+        const r = (await this.recordPage("Order Success", this.successPrefix)).hits;
+        if (!this.result.orders.some(t => t.pageUrl && t.pageUrl.toLowerCase().includes("checkout-success")) && r.length)
+            for (const t of r)
+                if (t.orderId || t.revenue || t.products || t.events.length) this.result.orders.push({
+                    pageUrl: this.currentPageUrl,
+                    pageName: t.pageName,
+                    orderId: t.orderId,
+                    revenue: t.revenue,
+                    products: t.products,
+                    events: t.events,
+                    eVars: t.eVars,
+                    props: t.props,
+                    timestamp: t.timestamp
+                });
+        this.log("    Order success page reached: " + this.currentPageUrl);
     }
     async run() {
         await this.createDriver();
@@ -1969,16 +1674,17 @@ hubPasswordProvided:true
             this.result.summary.ecommerceEvents = this.result.ecommerceEvents.length;
             this.result.summary.productsCaptured = this.result.products.length;
             this.result.summary.ordersCaptured = this.result.orders.length;
-            this.result.summary.passed = this.result.pages.filter(p => p.status === "PASS").length;
-            this.result.summary.failed = this.result.pages.filter(p => p.status === "FAIL").length;
-            this.result.summary.status = this.result.summary.failed === 0 && this.result.errors.length === 0 ? "PASS" : "FAIL";
+            this.result.summary.passed = this.result.pages.filter(t => "PASS" === t.status).length;
+            this.result.summary.failed = this.result.pages.filter(t => "FAIL" === t.status).length;
+            this.result.summary.status = 0 === this.result.summary.failed && 0 === this.result.errors.length ? "PASS" : "FAIL";
             this.result.finishedAt = new Date().toISOString();
+            this.progress();
             return this.result;
-        } catch (error) {
+        } catch (t) {
             this.result.errors.push({
                 timestamp: new Date().toISOString(),
                 step: this.result.pages.length + 1,
-                error: error.message || String(error),
+                error: t.message || String(t),
                 currentUrl: this.driver ? await this.driver.getCurrentUrl().catch(() => "") : ""
             });
             this.result.summary.status = "FAIL";
@@ -1988,10 +1694,13 @@ hubPasswordProvided:true
             this.result.summary.productsCaptured = this.result.products.length;
             this.result.summary.ordersCaptured = this.result.orders.length;
             this.result.finishedAt = new Date().toISOString();
-            throw error;
+            this.log(`    Journey failed: ${t.message||String(t)}`);
+            this.progress();
+            throw t;
         } finally {
-            await this.close();
+            await this.close()
         }
     }
 }
+
 module.exports = PreSalesJourneyValidator;
