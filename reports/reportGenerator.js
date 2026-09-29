@@ -47,10 +47,6 @@ if(!d.events.length)html+='<tr><td colspan="6" class="muted">No events captured.
 html+='</tbody></table></div>';
 });
 html+='</div></div>';
-html+='<div class="section"><div class="head"><h2>3. CTA Validation</h2><p>event6 and CTA-specific variables are validated only against the CTA click hit.</p></div><div class="body">';
-let ctaIndex=0;pages.forEach(p=>{const records=ctaRecords(p);if(!records.length)return;records.forEach(item=>{ctaIndex++;const c=ctaDetails(item);const name=item.ctaName||item.label||item.name||"Unnamed CTA";html+='<div class="errorline"><strong>'+e(name)+'</strong> — '+(c.status==="PASS"?"CTA fired and Adobe CTA hit captured.":"CTA not fired / Adobe CTA hit not captured; may not be implemented under Adobe tags.")+'</div>'})});
-if(!ctaIndex)html+='<div class="errorline">No CTA validation records were generated.</div>';
-html+='</div></div>';
 html+='<div class="section"><div class="head"><h2>4. Marketing Pixels</h2><p>Marketing pixel detection remains unchanged.</p></div><div class="body"><div class="table"><table><thead><tr><th>#</th><th>Vendor</th><th>Use</th><th>Pages</th></tr></thead><tbody>';
 const pixels=[];pages.forEach(p=>(Array.isArray(p.marketingPixels)?p.marketingPixels:[]).forEach(x=>{const name=x?.name||x?.vendor;if(!name)return;let y=pixels.find(a=>a.name.toLowerCase()===String(name).toLowerCase());if(!y){y={name,use:x.use||"Engagement",pages:[]};pixels.push(y)}if(!y.pages.includes(pageUrl(p)))y.pages.push(pageUrl(p))}));
 pixels.forEach((x,i)=>html+='<tr><td>'+(i+1)+'</td><td>'+e(x.name)+'</td><td>'+e(x.use)+'</td><td class="url">'+e(x.pages.join(", "))+'</td></tr>');
