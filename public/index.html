@@ -371,10 +371,6 @@ Waiting for job logs...
 </div>
 
 <div class="job-label" style="margin-top:10px">
-Current pageName
-</div>
-<div id="currentPageNameValue" class="job-value">-</div>
-<div class="job-label" style="margin-top:10px">
 Current Action
 </div>
 
@@ -878,10 +874,6 @@ document.getElementById(
 
 document.getElementById(
 "currentPageValue"
-).textContent=
-"-";
-document.getElementById(
-"currentPageNameValue"
 ).textContent=
 "-";
 
@@ -1544,85 +1536,58 @@ Array.isArray(pages)
 ?pages
 :[];
 
+const isCtaPhase=
+String(currentAction||"").toLowerCase().includes("validating cta")||
+!!String(currentCta||"").trim();
+
+const actionText=
+isCtaPhase
+?"Validating CTA"
+:String(currentAction||"Loading page");
+
+const pageLoadName=
+currentPageName||
+(typeof currentPage==="object"&&currentPage.pageName)||
+"";
+
 if(currentPage){
 
-if(
-typeof currentPage==="string"
-){
+if(typeof currentPage==="string"){
 
 document.getElementById(
 "currentPageValue"
 ).textContent=
 currentPage;
-document.getElementById(
-"currentPageNameValue"
-).textContent=
-currentPageName||
-"-";
-document.getElementById(
-"currentActionValue"
-).textContent=
-currentAction||
-"-";
-document.getElementById(
-"currentCtaValue"
-).textContent=
-currentCta||
-"-";
-
-}else{
-
-if(currentPage.url){
-
-document.getElementById(
-"currentPageValue"
-).textContent=
-`${currentPage.step||"Running"} - ${currentPage.url}`;
-document.getElementById(
-"currentPageNameValue"
-).textContent=
-currentPage.pageName||
-"-";
 
 }else{
 
 document.getElementById(
 "currentPageValue"
 ).textContent=
-currentPage.step||
-"Running";
-document.getElementById(
-"currentPageNameValue"
-).textContent=
-currentPage.pageName||
-"-";
+currentPage.url
+?`${currentPage.step||"Running"} - ${currentPage.url}`
+:(currentPage.step||"Running");
 
 }
 
 document.getElementById(
 "currentActionValue"
 ).textContent=
-currentPage.action||
-currentAction||
-"-";
+isCtaPhase
+?actionText
+:`Page Load - ${actionText}`;
 
 document.getElementById(
 "currentCtaValue"
 ).textContent=
-currentPage.cta||
-currentCta||
-"-";
-
-}
+isCtaPhase
+?(currentCta||((typeof currentPage==="object"&&currentPage.cta)||"-"))
+:(pageLoadName||"-");
 
 }else{
 
 document.getElementById(
 "currentPageValue"
-).textContent=
-"-";
-document.getElementById(
-"currentPageNameValue"
 ).textContent=
 "-";
 
@@ -1635,8 +1600,9 @@ currentAction||
 document.getElementById(
 "currentCtaValue"
 ).textContent=
-currentCta||
-"-";
+isCtaPhase
+?(currentCta||"-")
+:(pageLoadName||"-");
 
 }
 
@@ -1646,11 +1612,7 @@ body.innerHTML=
 `
 <tr>
 <td colspan="4">
-${
-currentPage
-?"Journey running..."
-:"Waiting for page data..."
-}
+${currentPage?"Journey running...":"Waiting for page data..."}
 </td>
 </tr>
 `;
@@ -1719,7 +1681,8 @@ function(page){
 
 return(
 page.url||
-page.pageUrl
+page.pageUrl||
+page.finalUrl
 )===currentPage.url;
 
 }
@@ -1740,6 +1703,7 @@ currentPage.url
 
 <td>${escapeHtml(
 currentPage.pageName||
+pageLoadName||
 "-"
 )}</td>
 
@@ -1754,7 +1718,6 @@ RUNNING
 }
 
 }
-
 function escapeHtml(
 value
 ){
