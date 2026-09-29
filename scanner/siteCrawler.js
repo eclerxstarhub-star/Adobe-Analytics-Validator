@@ -26,11 +26,19 @@ progress(){try{this.onProgress()}catch(e){}}
 
 async createDriver(){
 const options=new chrome.Options;
+options.setPageLoadStrategy("eager");
 options.addArguments("--headless=new","--disable-gpu","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080");
 options.setLoggingPrefs({performance:"ALL",browser:"ALL"});
 options.setPerfLoggingPrefs({enableNetwork:true,enablePage:true});
 this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();
-try{await this.driver.sendDevToolsCommand("Network.enable",{})}catch(e){
+try{
+await this.driver.manage().setTimeouts({pageLoad:90000,script:10000});
+}catch(e){
+this.log("WARN",`Unable to configure WebDriver timeouts: ${e.message||e}`);
+}
+try{
+await this.driver.sendDevToolsCommand("Network.enable",{});
+}catch(e){
 this.log("WARN",`Unable to enable Chrome Network domain: ${e.message||e}`);
 }
 return this.driver;
@@ -234,7 +242,7 @@ async waitForAdobeHit(timeout=this.maxAdobeWait){
 return await this.captureAdobeHits(timeout)
 }
 
-async waitForPageComplete(timeout=30000){
+async waitForPageComplete(timeout=15000){
 if(!this.driver)return false;
 
 const start=Date.now();
@@ -243,7 +251,7 @@ while(Date.now()-start<timeout){
 try{
 const readyState=await this.driver.executeScript("return document.readyState");
 
-if(readyState==="complete")return true;
+if(readyState==="complete"||readyState==="interactive")return true;
 }catch(e){}
 
 await new Promise(r=>setTimeout(r,250));
