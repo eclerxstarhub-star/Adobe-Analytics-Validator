@@ -983,12 +983,18 @@ uniquePageHits.push(hit);
 }
 
 const latestHit=uniquePageHits[uniquePageHits.length-1];
+const pageNameHit=[...uniquePageHits]
+.reverse()
+.find(hit=>String(hit?.pageName||"").trim());
 const domPageName=await this.getPageNameFromDom();
 
 pageResult.adobeHits=uniquePageHits;
 pageResult.adobeTracked=uniquePageHits.length>0;
 pageResult.adobeStatus=pageResult.adobeTracked?"PASS":"FAIL";
-pageResult.pageName=latestHit?.pageName||domPageName||"";
+pageResult.pageName=
+pageNameHit?.pageName||
+domPageName||
+"";
 this.currentPageName=pageResult.pageName||"";
 this.currentAction="Page name captured";
 this.progress();
