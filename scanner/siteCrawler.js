@@ -115,6 +115,7 @@ for(const[k,v]of body.entries())params.set(k,v)
 const suiteMatch=parsed.pathname.match(/\/b\/ss\/([^/?]+)/i),reportSuite=suiteMatch?decodeURIComponent(suiteMatch[1]):"";
 const pageName=params.get("pageName")||params.get("gn")||"",products=params.get("products")||"",eventsRaw=params.get("events")||"",eVars={},props={},events={};
 const linkType=params.get("pe")||"",linkName=params.get("pev2")||"",linkText=params.get("link")||"";
+const g=params.get("g")||"",ch=params.get("ch")||"",server=params.get("server")||"";
 
 for(const[key,value]of params.entries()){
 if(/^v\d+$/i.test(key)){eVars[key]=value;this.results.eVars[key]=value}
@@ -129,7 +130,7 @@ if(name){events[name]=true;this.results.events[name]=true}
 
 if(reportSuite)this.results.reportSuites[reportSuite]=(this.results.reportSuites[reportSuite]||0)+1;
 
-const hit={url,requestId,reportSuite,pageName,products,events,eVars,props,pe:linkType,pev2:linkName,link:linkText,timestamp:new Date().toISOString()};
+const hit={url,requestId,reportSuite,pageName,products,events,eVars,props,g,ch,server,pe:linkType,pev2:linkName,link:linkText,timestamp:new Date().toISOString()};
 
 const hitKey=[requestId||"",url,JSON.stringify(eVars),JSON.stringify(props),JSON.stringify(events),pageName,products,linkType,linkName,linkText].join("|");
 
