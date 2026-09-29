@@ -14,6 +14,7 @@ this.maxAdobeWait=options.maxAdobeWait||30000;
 this.postAdobeWait=options.postAdobeWait||2000;
 this.ctaClickWait=options.ctaClickWait||8000;
 this.ctaPollInterval=options.ctaPollInterval||250;
+this.validations={pageLoad:true,eVars:true,props:true,events:true,products:true,cta:true,...(options.validations||{})};
 this.results={pages:[],adobePages:[],adobeHits:[],marketingPixels:[],errors:[],eVars:{},props:{},events:{},reportSuites:{},ctaValidations:[],totalNetworkRequests:0};
 this.visited=new Set;
 this.queue=[];
@@ -1011,10 +1012,11 @@ this.log(
 
 pageResult.marketingPixels=this.results.marketingPixels.slice(-100);
 
+pageResult.links=await this.getPageLinks(baseUrl);
+
+if(this.validations.cta){
 this.currentAction="Finding links and CTAs";
 this.progress();
-
-pageResult.links=await this.getPageLinks(baseUrl);
 
 pageResult.ctas=await this.getCTAs();
 
@@ -1040,6 +1042,10 @@ item=>item.status==="FAIL"
 )
 ){
 pageResult.status="FAIL";
+}
+}else{
+pageResult.ctas=[];
+pageResult.ctaValidations=[];
 }
 
 }catch(error){
