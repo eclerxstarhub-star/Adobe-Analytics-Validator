@@ -411,7 +411,7 @@ return !!(hit && hit.events) && Object.keys(hit.events).some(name => this.isEven
 }
 
 getHitEVar24(hit){
-return hit && hit.eVars ? hit.eVars.v24 || hit.eVars.V24 || hit.eVars.eVar24 || "" : "";
+return hit && hit.eVars ? hit.eVars.v24 || hit.eVars.V24 || "" : "";
 }
 
 isCTAAdobeHit(hit){
