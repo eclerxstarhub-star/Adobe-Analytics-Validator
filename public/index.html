@@ -1547,7 +1547,7 @@ isCtaPhase
 
 const pageLoadName=
 currentPageName||
-(typeof currentPage==="object"&&currentPage.pageName)||
+(currentPage&&typeof currentPage==="object"&&currentPage.pageName)||
 "";
 
 if(currentPage){
