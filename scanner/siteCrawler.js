@@ -26,8 +26,8 @@ progress(){try{this.onProgress()}catch(e){}}
 
 async createDriver(){
 const options=new chrome.Options;
-options.setPageLoadStrategy("none");
-options.addArguments("--headless=new","--disable-gpu","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080");
+options.setPageLoadStrategy("eager");
+options.addArguments("--headless=new","--disable-gpu","--disable-software-rasterizer","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080","--blink-settings=imagesEnabled=false");
 options.setLoggingPrefs({performance:"ALL"});
 options.setPerfLoggingPrefs({enableNetwork:true,enablePage:true});
 this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();
@@ -38,8 +38,9 @@ this.log("WARN",`Unable to configure WebDriver timeouts: ${e.message||e}`);
 }
 try{
 await this.driver.sendDevToolsCommand("Network.enable",{});
+await this.driver.sendDevToolsCommand("Network.setBlockedURLs",{urls:["*.png","*.jpg","*.jpeg","*.gif","*.webp","*.avif","*.mp4","*.webm"]});
 }catch(e){
-this.log("WARN",`Unable to enable Chrome Network domain: ${e.message||e}`);
+this.log("WARN",`Unable to configure Chrome network controls: ${e.message||e}`);
 }
 return this.driver;
 }
@@ -1012,7 +1013,10 @@ const latestHit=uniquePageHits[uniquePageHits.length-1];
 const pageNameHit=[...uniquePageHits]
 .reverse()
 .find(hit=>String(hit?.pageName||"").trim());
-const domPageName=await this.getPageNameFromDom();
+const domPageName=
+pageNameHit?.pageName
+?""
+:await this.getPageNameFromDom();
 
 pageResult.adobeHits=uniquePageHits;
 pageResult.adobeTracked=uniquePageHits.length>0;
