@@ -26,10 +26,13 @@ progress(){try{this.onProgress()}catch(e){}}
 
 async createDriver(){
 const options=new chrome.Options;
-options.addArguments("--disable-gpu","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080");
+options.addArguments("--headless=new","--disable-gpu","--no-sandbox","--disable-dev-shm-usage","--disable-notifications","--disable-popup-blocking","--window-size=1920,1080");
 options.setLoggingPrefs({performance:"ALL",browser:"ALL"});
+options.setPerfLoggingPrefs({enableNetwork:true,enablePage:true});
 this.driver=await new Builder().forBrowser("chrome").setChromeOptions(options).build();
-try{await this.driver.sendDevToolsCommand("Network.enable",{})}catch(e){}
+try{await this.driver.sendDevToolsCommand("Network.enable",{})}catch(e){
+this.log("WARN",`Unable to enable Chrome Network domain: ${e.message||e}`);
+}
 return this.driver;
 }
 
@@ -85,7 +88,12 @@ try{return new URL(url).pathname.toLowerCase().startsWith("/personal/checkout-su
 
 async getPerformanceLogs(){
 if(!this.driver)return[];
-try{return await this.driver.manage().logs().get("performance")}catch(e){return[]}
+try{
+return await this.driver.manage().logs().get("performance");
+}catch(e){
+this.log("ERROR",`Chrome performance logs unavailable: ${e.message||e}`);
+return[];
+}
 }
 
 async clearPerformanceLogs(){
